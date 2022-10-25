@@ -14,9 +14,367 @@ from utilities import print  # Use timestamped print
 import optimizers
 
 # TODO
+# add vgg
+# add resnet
 # consider better debugging when field in architectures is not specified (eg adv_train)
 # remove attack object instantiation when Attacks module is updated
 # reconsider inheritence structure (all args must be passed to each class atm)
+# investigate if https://github.com/pytorch/pytorch/issues/8741 works for cpu method
+# __repr__
+# implement auto-batching for GPU memory
+
+
+class LinearClassifier:
+    """
+    This class defines a PyTorch-based linear model. It exposes the basic
+    interfaces useful for building broadly any neural network. While primarily
+    designed to be inherited for more complex models, instantiating this class
+    with defualt parameters yields a single-layer linear model with categorical
+    cross-entropy loss (i.e., softmax regression). It defines the following
+    methods:
+
+    :func:`__init__`: instantiates LinearClassifier objects
+    :func:`__call__`: returns model logits
+    :func:`__getattr__`: return torch nn.Sequential object attributes
+    :func:`__repr__`: returns architecture, hyperparameters, and algorithms
+    :func:`accuracy`: returns model accuracy
+    :func:`build`: assembles the model
+    :func:`cpu`: moves all tensors to cpu
+    :func:`cuda`: moves all tensors to gpu
+    :func:`cuda_or_cpu`: matches optimizer and scheduler states to model device
+    :func:`fit`: performs model training
+    :func:`load`: loads model, optimizer, and scheduler
+    :func:`predict`: returns predicted labels
+    :func:`save`: saves model, optimizer, and scheduler
+    """
+
+    def __init__(
+        self,
+        batch_size=128,
+        iters=10,
+        learning_rate=1e-3,
+        loss=torch.nn.CrossEntropyLoss,
+        optimizer=optimizers.Adam,
+        optimizer_params={},
+        scheduler=None,
+        scheduler_params={},
+        threads=None,
+        verbosity=0.25,
+    ):
+        """
+        This method instantiates LinearClassifier objects with a variety of
+        attributes necessary to support model training and logging.
+        Importantly, models are not usable until they are trained (via fit()),
+        this "lazy" model creation schema allows us to abstract parameterizing
+        of number of features and labels (thematically similar to scikit-learn
+        model classes) on initialization.
+
+        :param batch_size: training batch size (-1 for 1 batch)
+        :type batch_size: int
+        :param iters: number of training iterations (ie epochs)
+        :type iters: int
+        :param learning_rate: learning rate
+        :type learning_rate: float
+        :param loss: loss function
+        :type loss: torch nn class
+        :param optimizer: optimizer from optimizers package
+        :type optimizer: torch optim class
+        :param optimizer_params: optimizer parameters
+        :type optimizer_params: dict
+        :param scheduler: scheduler for dynamic learning rates
+        :type scheduler: torch optim.lr_scheduler class or None
+        :param scheduler_params: scheduler parameters
+        :type scheduler_params: dict
+        :param threads: number of cpu threads used for training
+        :type threads: int or None (for max threads)
+        :param verbosity: print the loss every verbosity%
+        :type verbosity: float
+        :return: a linear classifier skeleton
+        :rtype: LinearClassifier object
+        """
+        super().__init__()
+        self.batch_size = batch_size
+        self.iters = iters
+        self.learning_rate = learning_rate
+        self.loss_func = loss(reduction="sum")
+        self.optimizer_alg = optimizer
+        self.scheduler_alg = scheduler
+        self.threads = (
+            min(threads, torch.get_num_threads())
+            if threads
+            else torch.get_num_threads()
+        )
+        self.verbosity = max(1, int(iters * verbosity))
+        self.params = {
+            "batch_size": batch_size,
+            "iters": iters,
+            "lr": learning_rate,
+            "loss": loss.__name__,
+            "optim": optimizer.__name__,
+            "state": "skeleton",
+        } | ({"lr_scheduler": scheduler.__name__} if scheduler else {})
+        return None
+
+    def __call__(self, x, grad=True):
+        """
+        This method returns the model logits. Optionally, gradient-tracking can
+        be disabled for fast inference. Importantly, when using gpus, inputs
+        are auto-batched to sizes that will fit within VRAM to prevent
+        out-of-memory errors.
+
+        :param x: the batch of inputs
+        :type x: torch Tensor object (n, m)
+        :param grad: whether gradient computation
+        :type grad: boolean
+        :return: model logits
+        :rtype: torch Tensor object (n, c)
+        """
+        with torch.set_grad_enabled(grad):
+            return self.model(x)
+
+    def __getattr__(self, name):
+        """
+        This method ostensibly aliases torch nn.Sequential object (i.e.,
+        self.model) attributes to be accessible by this object directly. It is
+        principally used for easier debugging.
+
+        :param name: name of the attribute to recieve from self.model
+        :type name: str
+        :return: the desired attribute (if it exists)
+        :rtype: misc
+        """
+        return self.model.__getattribute__(name)
+
+    def __repr__(self):
+        """
+        This method returns a concise string representation of algorithms,
+        hyperparameters, and architecture.
+
+        :return: algorithms used and hyperparameters
+        :rtype: str
+        """
+        return f"LinearClassifer({self.params})"
+
+    def accuracy(self, x, y):
+        """
+        This method returns the fraction of inputs classified correctly over
+        the total number of samples. Additionally, a boolean tensor containing
+        which inputs were classified correctly is stored (which is useful for
+        attacks that leverage this information, e.g., APGD, as shown in
+        https://arxiv.org/abs/2003.01690).
+
+        :param x: batch of inputs
+        :type x: torch Tensor object (n, m)
+        :param y: batch of labels
+        :type y: Pytorch Tensor object (n,)
+        :return: model accuracy
+        :rtype: torch Tensor object (1,)
+        """
+        correct = self(x, False).argmax(1).eq(y)
+        self.correct = correct
+        return correct.sum().div(y.numel())
+
+    def build(self, x, y):
+        """
+        This method instantiates a torch Sequential object. This abstraction
+        allows us to dynamically build models based on the passed-in dataset,
+        versus hardcoding model architectures via a forward() method. Moreover,
+        we augment the stored parameters for informative string
+        representations.
+
+        :param x: dataset of inputs
+        :type x: torch Tensor object (n, m)
+        :param y: dataset of labels
+        :type y: Pytorch Tensor object (n,)
+        :return: an untrained linear classifier
+        :rtype: torch Sequential object
+        """
+        self.params["features"] = x.size(1)
+        self.params["classes"] = y.unique().numel()
+        self.params["state"] = "untrained"
+        return torch.nn.Sequential(torch.nn.Linear(x.size(1), y.unique().numel()))
+
+    def cpu(self):
+        """
+        This method moves the model, optimizer, and scheduler to the cpu. At
+        this time, to() and cpu() methods are not supported for optimizers nor
+        schedulers (https://github.com/pytorch/pytorch/issues/41839), so we
+        leverage a trick shown in
+        https://github.com/pytorch/pytorch/issues/8741 to refresh the state of
+        optimizers and schedulers (as these subroutines match device state to
+        that of the attached parameters).
+
+        :return: linear classifier
+        :rtype: LinearClassifier object
+        """
+        self.model.cpu()
+        self.cuda_or_cpu()
+        return self
+
+    def cuda(self):
+        """
+        This method moves the model, optimizer, and scheduler to the gpu. At
+        this time, to() and cuda() methods are not supported for optimizers nor
+        schedulers (https://github.com/pytorch/pytorch/issues/41839), so we
+        leverage a trick shown in
+        https://github.com/pytorch/pytorch/issues/8741 to refresh the state of
+        optimizers and schedulers (as these subroutines match device state to
+        that of the attached parameters).
+
+        :return: linear classifier
+        :rtype: LinearClassifier object
+        """
+        self.model.cuda()
+        self.cuda_or_cpu()
+        return self
+
+    def cuda_or_cpu(self):
+        """
+        This method applies the trick shown in
+        https://github.com/pytorch/pytorch/issues/8741 to optimizer and
+        scheduler states. Given that process is device agnostic (in that the
+        states are simply refreshed), it is expected that method be called by
+        either cpu() or cuda().
+
+        :return: None
+        :rtype: NoneType
+        """
+        self.optimizer.load_state_dict(self.optimizer.state_dict())
+        self.scheduler.load_state_dict(self.scheduler.state_dict())
+        return None
+
+    def fit(self, x, y, validation=0.0, atk=None):
+        """
+        This method is the heart of all LinearClassifier-inherited objects. It
+        performs three functions: (1) instantiating a model (i.e., torch
+        Sequential object) and updates the string representation based on
+        attributes of the passed in dataset (i.e., x and y), (2) training the
+        instantiated model, (3) optionally performing adversarial training, and
+        (4) computing statistics over a validation set.
+
+        :param x: training inputs
+        :type x: torch Tensor object (n, m)
+        :param y: training labels
+        :type y: Pytorch Tensor object (n,)
+        :param validation: hold-out set or proportion of training data use
+        :type validation: tuple of torch Tensor objects or float
+        :param atk: attack to use to perform adversarial training
+        :type atk: clevertorch attack object
+        :return: a trained linear classifier model
+        :rtype: LinearClassifier object
+        """
+
+        # instantiate model, optimizer, and scheduler
+        self.model = self.build(x, y)
+        self.optimizer = self.optimizer_alg(
+            self.model.parameters(), lr=self.learning_rate, **self.optimizer_params
+        )
+        self.scheduler = (
+            self.scheduler_alg(self.optimizer, **self.scheduler_params)
+            if self.scheduler_alg
+            else None
+        )
+        print(f"Defined model:\n{self.model}")
+
+        # prepare validation set (if applicable) and data loader
+        if isinstance(validation, float):
+            num_val = int(y.numel() * validation)
+            perm_idx = torch.randperm(y.numel())
+            x_val, x = x[perm_idx].tensor_split([num_val])
+            y_val, y = y[perm_idx].tensor_split([num_val])
+            print(f"Validation set created with shape: {x_val.size()} × {y.size()}")
+        else:
+            x_val, y_val = validation
+        trainset = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(x, y),
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+        print(f"Data loader prepared with shape: {x.size()} × {y.size()}")
+
+        # attach attack if performing adversarial training
+        if atk:
+            self.atk = atk
+            self.atk.model = self
+            self.params["atk"] = repr(self.atk)
+            print(f"Performing adversarial training with: {self.atk}")
+
+        # set cpu threads, metadata variables, and track gradients
+        device = (
+            torch.cuda.get_device_name()
+            if self.model.is_cuda
+            else f"cpu ({self.threads} threads)"
+        )
+        print(f"Training for {self.iters} iterations on {device}...")
+        self.model.train()
+        self.model.requires_grad_(True)
+        self.stats = {"train_acc": [], "train_loss": []} | (
+            {"val_acc": [], "val_loss": []} if validation != 0 else {}
+        )
+        max_threads = torch.get_num_threads()
+        torch.set_num_threads(self.threads)
+
+        # enter main training loop; apply scheduler and reset iteration loss
+        for current_iter in range(self.iters):
+            self.scheduler.step() if self.scheduler else None
+            iter_loss = 0
+            iter_acc = 0
+
+            # perform one iteration of training
+            for xb, yb in trainset:
+                self.model.requires_grad_(False)
+                xb = self.atk.craft(xb, yb) if atk else xb
+                self.model.requires_grad_(True)
+                batch_logits = self.model(xb)
+                batch_loss = self.loss(batch_logits, yb)
+                batch_loss.backward()
+                self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
+                iter_loss += batch_loss.item()
+                iter_acc += batch_logits.argmax(1).eq(yb).sum()
+
+            # collect learning statistics every iteration
+            self.stats["train_loss"].append(iter_loss)
+            self.stats["train_acc"].append(iter_acc.div(y.numel()).item())
+            if validation != 0:
+                val_logits = self.model(x_val, False)
+                self.stats["val_loss"].append(self.loss(val_logits, y_val))
+                self.stats["val_acc"].append(
+                    val_logits.argmax(1).eq(y_val).div(y_val.numel())
+                )
+
+            # print learning statistics every verbosity%
+            print(
+                f"Iter: {current_iter + 1}/{self.iters}",
+                f"Loss: {iter_loss:.3f} ({iter_loss - self.stats['train_loss']:+.3})",
+                f"Accuracy: {iter_acc:.3f} ({iter_acc - self.stats['train_acc']:+.3})",
+                (f"Validation Loss: {")
+            ) if not current_iter % self.info else None
+
+        # disable gradients, restore thread count, and compute adversarial statistics
+        print(
+            "Disabling gradients",
+            ("and setting max threads to", f"{max_threads}...")
+            if not self.model.is_cuda
+            else "...",
+        )
+        self.model.requires_grad_(False)
+        torch.set_num_threads(max_threads)
+        self.model.eval()
+        if atk:
+            atk_logits = self.model(self.atk.craft(x, y))
+            atk_loss = self.loss(atk_logits, y).item()
+            adv_acc = atk_logits.argmax(1).eq(yb).sum().div(y.numel()).item()
+            print("Adversarial Loss")
+
+        # print statistics about adversarial training (if not CIFAR 10)
+        if adv_train and x.size(-1) != 3072:
+            train_adv = self.adv_train_atk.craft(x, y)
+            adv_loss = self.loss(self.model(train_adv), y)
+            adv_acc = self.accuracy(train_adv, y).item()
+            print(f"Adversarial loss: {adv_loss:.2f} & accuracy: {adv_acc:.2f}")
+        print(f"Freezing parameters and restoring thread count to {max_threads}...")
+        return self
 
 
 class LinearClassifier(torch.nn.Module):
@@ -39,141 +397,7 @@ class LinearClassifier(torch.nn.Module):
     :func:`predict`: returns predicted labels
     """
 
-    def __init__(
-        self,
-        adv_train=None,
-        optimizer=optimizers.Adam,
-        loss=torch.nn.CrossEntropyLoss,
-        batch_size=128,
-        learning_rate=1e-4,
-        iters=10,
-        threads=None,
-        info=0.25,
-    ):
-        """
-        This method describes the initial setup for a simple linear classifier.
-        Importantly, models are not usable until they are trained (via fit()),
-        this "lazy" model creation schema allows us to abstract parameterizing
-        of number of features and labels (thematically similar to scikit-learn
-        model classes) on initialization.
-
-        :param adv_train: attack used for adversarial training
-        :type adv_train: Attack object
-        :param optimizer: optimizer from optimizers package
-        :type optimizer: callable
-        :param loss: loss function from torch.nn.modules.loss
-        :type loss: callable
-        :param batch_size: size of minibatches
-        :type batch_size: integer
-        :param learning_rate: learning rate schedule
-        :type learning_rate: float
-        :param iters: number of training iterations (ie epochs)
-        :type iters: integer
-        :param threads: sets the threads used for training
-        :type threads: integer
-        :param info: print the loss every info percent
-        :type info: float between 0 and 1
-        :return: Single-layer classifier
-        :rtype: LinearClassifier object
-        """
-        super().__init__()
-        self.adv_train = adv_train
-        self.optimizer = optimizer
-        self.loss = loss()
-        self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.epochs = iters
-        self.threads = (
-            min(threads, torch.get_num_threads())
-            if threads
-            else torch.get_num_threads()
-        )
-        self.info = max(1, int(iters * info))
-        return None
-
-    def __call__(self, x, grad=True):
-        """
-        This method allows us to have MLPClassifier objects behave as
-        functions directly. Specifically, we redefine this method to pass
-        Tensor inputs directly into Pytorch Sequential containers, which allows
-        class objects to behave more like augmented Pytorch models directly
-        instead of custom classes that embedd Pytorch models inside.
-
-        :param x: samples
-        :type x: n x m tensor of samples
-        :param grad: whether or not to keep track of operations on x
-        :type grad: boolean
-        :return: model logits
-        :rtype: n x c tensor where c is the number of classes
-        """
-        with torch.set_grad_enabled(grad):
-            return self.model(x)
-
-    def accuracy(self, x, y):
-        """
-        This method simply returns the fraction of samples classified correctly
-        (as defined by y) over the total number of samples.
-
-        :param x: dataset of samples
-        :type x: n x m matrix
-        :param y: dataset of labels
-        :type y: n-length vector
-        :return: model accuracy
-        :rtype: float
-        """
-
-        # hardfix for CIFAR 10
-        if x.size(0) > 20000 and x.size(-1) == 3072:
-            bsize = 25000
-            ncorr = []
-            for i in range(0, 50000, bsize):
-                print(f"Computing b{i} accuracy...")
-                ncorr.append(
-                    torch.eq(
-                        torch.argmax(self(x[i : bsize + i], grad=False), dim=1),
-                        y[i : bsize + i],
-                    ).sum()
-                )
-            return sum(ncorr) / y.numel()
-        else:
-            return (
-                torch.eq(torch.argmax(self(x, grad=False), dim=1), y).sum() / y.numel()
-            )
-
-    def build(self, x, y):
-        """
-        This method instantiates a PyTorch sequential container. This
-        abstraction allows us to dynamically build models based on the
-        passed-in dataset, as opposed to hardcoding model architectures via
-        defining a "forward" method.
-
-        :param x: dataset of samples
-        :type x: n x m matrix
-        :param y: dataset of labels
-        :type y: n-length vector
-        :return: linear model
-        :rtype: Sequential container
-        """
-        return torch.nn.Sequential(torch.nn.Linear(x.size(1), torch.unique(y).size(0)))
-
-    def cpu(self):
-        """
-        This method moves both the model and the optimizer state to the cpu.
-        At this time, `to`, `cpu`, and `cuda` methods are not supported for
-        optimizers, so we must manually set tensor devices
-        (https://github.com/pytorch/pytorch/issues/41839).
-
-        :return the model itself
-        :rtype: LinearClassifier object
-        """
-        self.model.cpu()
-        for state in self.opt.state.values():
-            for k, v in state.items():
-                if torch.is_tensor(v):
-                    state[k] = v.cpu()
-        return self
-
-    def fit(self, x, y, adv_train=False):
+    def fit(self, x, y, xtest_validation, adv_train=False):
         """
         This method prepends and appends linear layers with dimensions
         inferred from the dataset. Moreover, it trains the model using the
