@@ -11,9 +11,7 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # add vgg
 # add resnet
 # consider better debugging when field in architectures is not specified (eg adv_train)
-# investigate if https://github.com/pytorch/pytorch/issues/8741 works for cpu method
-# implement auto-batching for GPU memory
-# allow loading of pre-trained models
+# confirm if https://github.com/pytorch/pytorch/issues/8741 works for cpu method
 
 
 class LinearClassifier:
@@ -35,6 +33,8 @@ class LinearClassifier:
     :func:`cuda`: moves all tensors to gpu
     :func:`cuda_or_cpu`: matches optimizer and scheduler states to model device
     :func:`fit`: performs model training
+    :func:`max_batch_size`: determines max batch size for gpus
+    :func:`prefit`: load pretrained parameters
     """
 
     def __init__(
@@ -45,6 +45,7 @@ class LinearClassifier:
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
         optimizer_params={},
+        safe_batch=True,
         scheduler=None,
         scheduler_params={},
         threads=None,
@@ -70,6 +71,8 @@ class LinearClassifier:
         :type optimizer: torch optim class
         :param optimizer_params: optimizer parameters
         :type optimizer_params: dict
+        :param safe_batch: prevent gpu oom errors for large batches
+        :type safe_batch: bool
         :param scheduler: scheduler for dynamic learning rates
         :type scheduler: torch optim.lr_scheduler class or None
         :param scheduler_params: scheduler parameters
@@ -87,6 +90,7 @@ class LinearClassifier:
         self.learning_rate = learning_rate
         self.loss_func = loss(reduction="sum")
         self.optimizer_alg = optimizer
+        self.safe_batch = safe_batch
         self.scheduler_alg = scheduler
         self.threads = (
             min(threads, torch.get_num_threads())
@@ -108,18 +112,18 @@ class LinearClassifier:
         """
         This method returns the model logits. Optionally, gradient-tracking can
         be disabled for fast inference. Importantly, when using gpus, inputs
-        are auto-batched to sizes that will fit within VRAM to prevent
-        out-of-memory errors.
+        are auto-batched (via max_batch_size()) to sizes that will fit within
+        VRAM to prevent out-of-memory errors.
 
         :param x: the batch of inputs
         :type x: torch Tensor object (n, m)
-        :param grad: whether gradient computation
-        :type grad: boolean
+        :param grad: whether gradients are computed
+        :type grad: bool
         :return: model logits
         :rtype: torch Tensor object (n, c)
         """
         with torch.set_grad_enabled(grad):
-            return self.model(x)
+            return torch.cat([self.model(xb) for xb in x.split(self.max_bs[grad])])
 
     def __getattr__(self, name):
         """
@@ -264,13 +268,16 @@ class LinearClassifier:
         )
         print(f"Defined model:\n{self.model}")
 
-        # prepare validation set (if applicable) and data loader
+        # find max batch size, build validation set, and prepare data loader
+        self.max_bs = self.max_batch_size() if self.safe_batch and x.is_cuda else None
         if isinstance(validation, float):
             num_val = int(y.numel() * validation)
             perm_idx = torch.randperm(y.numel())
             x_val, x = x[perm_idx].tensor_split([num_val])
             y_val, y = y[perm_idx].tensor_split([num_val])
-            print(f"Validation set created with shape: {x_val.size()} × {y.size()}")
+            print(
+                f"Validation set created with shape: {x_val.size()} × {y.size()}"
+            ) if not y_val.numel() else None
         else:
             x_val, y_val = validation
         trainset = torch.utils.data.DataLoader(
@@ -366,6 +373,100 @@ class LinearClassifier:
             atk_loss = f"{self.loss(atk_logits, y).item():.3f}"
             atk_acc = f"{atk_logits.argmax(1).eq(yb).sum().div(y.numel()).item():.1%}"
             print("Adversarial Loss:", atk_loss, "Adversarial Acc:", atk_acc)
+        return self
+
+    def max_batch_size(self, grad=False, lower=1, upper=500000, utilization=0.95):
+        """
+        This method computes the maximum batch size usable for forward-only
+        (i.e., inference) and forward-backward (i.e., training) passes on gpus.
+        Specifically, this provides an abstraction so that large batch sizes
+        that would produce out-of-memory exceptions are automatically corrected
+        to smaller batches while maintaining maximum gpu utilization. This
+        method applies binary search on the batch size until the memory usage
+        is within the paramertized utilization. Afterwards, grad_batch and
+        nograd_batch attributes are exposed (and used appropriately in
+        __call__() based on the value of grad). Notably, this method cannot be
+        called when model state is "skeleton."
+
+        :param grad: find sizes for forward-backward only or including forward
+        :type grad: bool
+        :param lower_batch: smallest batch size to consider
+        :type lower_batch: int
+        :param stages: find forward-only (0) and/or forward-backward (1) sizes
+        :type stages: list of ints
+        :param upper_batch: largest batch size to consider
+        :type upper_batch: int
+        :param utilization: minimum percentage of memory to be used
+        :type utilization: float
+        :return: max batch sizes for forward-only and forward-backward passes
+        :rtype: tuple of ints
+        """
+        features = self.params["features"]
+        stage_names = ("forward-pass-only", "forward-backward-passes")
+        stage = stage_names[grad]
+        free_memory, max_memory = torch.cuda.mem_get_info()
+        print(f"Estimating {stage} maximum batch size...")
+        try:
+
+            # compute utilization
+            batch_size = (upper - lower) // 2
+            out = self.model(torch.empty((batch_size, features)), grad)
+            out.sum().backward() if grad else None
+            curr_util = torch.cuda.memory_allocated() / max_memory
+            print(f"{stage} utilization (batch size={batch_size}: {curr_util}")
+
+            # utilization target was met
+            if curr_util >= utilization:
+                print(f"{stage} utilization target met ({curr_util:.1%}!")
+
+                # return forward-backward (keep forward size if found))
+                return (batch_size,) * 2 if grad else batch_size, self.max_batch_size(
+                    True, 1, batch_size, utilization
+                )[1]
+
+            # required utilization is too high (search failed); drop by 5%
+            elif not batch_size:
+                utilization -= 0.05
+                print(f"Utilization is too strict! Dropping to {utilization:.0%}...")
+                return self.max_batch_size(grad, 1, 500000, utilization)
+
+            # utilization was below threshold;
+            return self.max_batch_size(grad, batch_size, upper, utilization)
+
+        # utilization was oversubscribed; cut batch size in half
+        except RuntimeError:
+            print(f"Out of memory for {stage} (batch_size={batch_size})!")
+            self.model.zero_grad(True)
+            torch.cuda.empty_cache()
+            return self.max_batch_size(grad, lower, batch_size, utilization)
+
+    def prefit(self, path):
+        """
+        This method loads pretrained PyTorch model parameters. Specifically,
+        this supports loading either: (1) complete models (e.g., trained torch
+        Sequential containers), or (2) trained parameters (e.g., state_dict's).
+        Notably, either object is assumed to saved via torch.save(). Finally,
+        many of the useful attributes set during fit() are estimated from the
+        model directly (e.g., number of features, classes, etc.)
+
+        :param path: path to the pretrained model
+        :type path: pathlib Path object
+        :return: a pretrained linear classifier model
+        :rtype: LinearClassifier object
+        """
+        # load parameters, set attributes, and find max batch size (if on gpu)
+        model = torch.load(path)
+        try:
+            self.model.load_state_dict(model)
+        except TypeError:
+            self.model = model
+        self.params["features"] = model[0].in_features
+        self.params["classes"] = model[-1].out_features
+        self.params["state"] = "pretrained"
+        print(f"Defined (pretrained) model:\n{self.model}")
+        self.max_batch_size() if self.safe_batch and next(
+            model.parameters()
+        ).is_cuda else None
         return self
 
 
