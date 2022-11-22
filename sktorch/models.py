@@ -12,6 +12,7 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # add resnet
 # consider better debugging when field in architectures is not specified (eg adv_train)
 # confirm if https://github.com/pytorch/pytorch/issues/8741 works for cpu method
+# provide cleaner implementation of shape for CNNs in LinearClassifier
 
 
 class LinearClassifier:
@@ -231,7 +232,7 @@ class LinearClassifier:
         self.scheduler.load_state_dict(self.scheduler.state_dict())
         return None
 
-    def fit(self, x, y, validation=0.0, atk=None):
+    def fit(self, x, y, validation=0.0, atk=None, shape=None):
         """
         This method is the heart of all LinearClassifier-inherited objects. It
         performs three functions: (1) instantiating a model (i.e., torch
@@ -248,6 +249,8 @@ class LinearClassifier:
         :type validation: tuple of torch Tensor objects or float
         :param atk: attack to use to perform adversarial training
         :type atk: clevertorch attack object
+        :param shape: original shape of x (channels, width, height)
+        :type shape: tuple of ints
         :return: a trained linear classifier model
         :rtype: LinearClassifier object
         """
@@ -256,7 +259,7 @@ class LinearClassifier:
         self.params["features"] = x.size(1)
         self.params["classes"] = y.unique().numel()
         self.params["state"] = "untrained"
-        self.model = self.build(x, y)
+        self.model = self.build(x, y, shape) if shape else self.build(x, y)
         self.model(x[:1])
         self.optimizer = self.optimizer_alg(
             self.model.parameters(), lr=self.learning_rate, **self.optimizer_params
