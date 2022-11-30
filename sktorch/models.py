@@ -150,7 +150,7 @@ class LinearClassifier:
         :return: algorithms used and hyperparameters
         :rtype: str
         """
-        return f"LinearClassifer({self.params})"
+        return f"{type(self).__name__}({self.params})"
 
     def accuracy(self, x, y):
         """
