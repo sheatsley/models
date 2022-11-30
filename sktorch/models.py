@@ -89,10 +89,12 @@ class LinearClassifier:
         self.batch_size = batch_size
         self.iters = iters
         self.learning_rate = learning_rate
-        self.loss_func = loss(reduction="sum")
+        self.loss = loss(reduction="sum")
         self.optimizer_alg = optimizer
+        self.optimizer_params = optimizer_params
         self.safe_batch = safe_batch
         self.scheduler_alg = scheduler
+        self.schedular_params = scheduler_params
         self.threads = (
             min(threads, torch.get_num_threads())
             if threads
@@ -104,7 +106,7 @@ class LinearClassifier:
             "iters": iters,
             "lr": learning_rate,
             "loss": loss.__name__,
-            "optim": optimizer.__name__,
+            "optimizer": optimizer.__name__,
             "state": "skeleton",
         } | ({"lr_scheduler": scheduler.__name__} if scheduler else {})
         return None
@@ -124,7 +126,8 @@ class LinearClassifier:
         :rtype: torch Tensor object (n, c)
         """
         with torch.set_grad_enabled(grad):
-            return torch.cat([self.model(xb) for xb in x.split(self.max_bs[grad])])
+            xbatch = x.split(self.max_bs[grad] if self.max_bs else x.size(0))
+            return torch.cat([self.model(xb) for xb in xbatch])
 
     def __getattr__(self, name):
         """
@@ -278,11 +281,11 @@ class LinearClassifier:
             perm_idx = torch.randperm(y.numel())
             x_val, x = x[perm_idx].tensor_split([num_val])
             y_val, y = y[perm_idx].tensor_split([num_val])
-            print(
-                f"Validation set created with shape: {x_val.size()} × {y.size()}"
-            ) if not y_val.numel() else None
         else:
             x_val, y_val = validation
+        print(
+            f"Validation set created with shape: {x_val.size()} × {y_val.size()}"
+        ) if validation else None
         trainset = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(x, y),
             batch_size=self.batch_size,
@@ -300,7 +303,7 @@ class LinearClassifier:
         # set cpu threads, metadata variables, and track gradients
         device = (
             torch.cuda.get_device_name()
-            if self.model.is_cuda
+            if next(self.model.parameters()).is_cuda
             else f"cpu ({self.threads} threads)"
         )
         print(f"Training for {self.iters} iterations on {device}...")
@@ -316,14 +319,14 @@ class LinearClassifier:
         for current_iter in range(self.iters):
             self.scheduler.step() if self.scheduler else None
             iter_loss = 0
-            iter_acc = 0
+            iter_acc = torch.tensor(0.0)
 
             # perform one iteration of training
             for xb, yb in trainset:
                 self.model.requires_grad_(False)
                 xb = self.atk.craft(xb, yb) if atk else xb
                 self.model.requires_grad_(True)
-                batch_logits = self.model(xb)
+                batch_logits = self(xb)
                 batch_loss = self.loss(batch_logits, yb)
                 batch_loss.backward()
                 self.optimizer.step()
@@ -333,36 +336,36 @@ class LinearClassifier:
 
             # collect learning statistics every iteration
             self.stats["train_loss"].append(iter_loss)
-            self.stats["train_acc"].append(iter_acc.div(y.numel()).item())
-            if not validation:
-                val_logits = self.model(x_val, False)
+            self.stats["train_acc"].append(iter_acc.div_(y.numel()).item())
+            if validation:
+                val_logits = self(x_val, False)
                 val_loss = self.loss(val_logits, y_val).item()
-                val_acc = val_logits.argmax(1).eq(y_val).div(y_val.numel()).item()
+                val_acc = val_logits.argmax(1).eq(y_val).sum().div(y_val.numel()).item()
                 self.stats["val_loss"].append(val_loss)
                 self.stats["val_acc"].append(val_acc)
 
             # print learning statistics every verbosity%
             print(
                 f"Iter: {current_iter + 1}/{self.iters}",
-                f"Loss: {iter_loss:.3f}",
-                f"({iter_loss - sum(self.stats['train_loss'][-2:-1]):+.3f})",
+                f"Loss: {iter_loss:.2f}",
+                f"({iter_loss - sum(self.stats['train_loss'][-2:-1]):+6.2f})",
                 f"Accuracy: {iter_acc:.1%}",
-                f"({iter_acc - sum(self.stats['train_acc'][-2:-1]):+.1%})",
-                (
-                    f"Validation Loss: {self.stats['val_loss'][-1]:.3f}",
-                    f"({val_loss - sum(self.stats['val_loss'][-2:-1]):+.3f})",
+                f"({iter_acc - sum(self.stats['train_acc'][-2:-1]):+6.1%})",
+                *(
+                    f"Validation Loss: {self.stats['val_loss'][-1]:.2f}",
+                    f"({val_loss - sum(self.stats['val_loss'][-2:-1]):+6.2f})",
                     f"Validation Acc: {self.stats['val_acc'][-1]:.1%}",
-                    f"({val_acc - sum(self.stats['val_acc'][-2:-1]):+.1%})",
+                    f"({val_acc - sum(self.stats['val_acc'][-2:-1]):+6.1%})",
                 )
-                if not validation
+                if validation
                 else "",
-            ) if not current_iter % self.info else None
+            ) if not (current_iter + 1) % self.verbosity else None
 
         # disable gradients, restore thread count, set state, and compute attack stats
         print(
             "Disabling gradients",
-            ("and setting max threads to", f"{max_threads}...")
-            if not self.model.is_cuda
+            f"and setting max threads to {max_threads}..."
+            if not next(self.model.parameters()).is_cuda
             else "...",
         )
         self.model.requires_grad_(False)
@@ -422,7 +425,7 @@ class LinearClassifier:
             if curr_util >= utilization:
                 print(f"{stage} utilization target met ({curr_util:.1%}!")
 
-                # return forward-backward (keep forward size if found))
+                # return forward-backward (keep forward size if found)
                 return (batch_size,) * 2 if grad else batch_size, self.max_batch_size(
                     True, 1, batch_size, utilization
                 )[1]
@@ -507,6 +510,7 @@ class MLPClassifier(LinearClassifier):
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
         optimizer_params={},
+        safe_batch=True,
         scheduler=None,
         scheduler_params={},
         threads=None,
@@ -538,6 +542,8 @@ class MLPClassifier(LinearClassifier):
         :type optimizer: torch optim class
         :param optimizer_params: optimizer parameters
         :type optimizer_params: dict
+        :param safe_batch: prevent gpu oom errors for large batches
+        :type safe_batch: bool
         :param scheduler: scheduler for dynamic learning rates
         :type scheduler: torch optim.lr_scheduler class or None
         :param scheduler_params: scheduler parameters
@@ -556,6 +562,7 @@ class MLPClassifier(LinearClassifier):
             loss,
             optimizer,
             optimizer_params,
+            safe_batch,
             scheduler,
             scheduler_params,
             threads,
@@ -592,12 +599,12 @@ class MLPClassifier(LinearClassifier):
         return torch.nn.Sequential(
             *itertools.chain.from_iterable(
                 zip(
-                    torch.nn.Dropout(self.dropout) * len(self.hidden_layers),
+                    (torch.nn.Dropout(self.dropout),) * len(self.hidden_layers),
                     map(torch.nn.LazyLinear, self.hidden_layers),
                     (self.activation(),) * len(self.hidden_layers),
                 )
             ),
-            torch.LazyLinear(y.unique().numel()),
+            torch.nn.LazyLinear(y.unique().numel()),
         )
 
 
@@ -637,6 +644,7 @@ class CNNClassifier(MLPClassifier):
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
         optimizer_params={},
+        safe_batch=True,
         scheduler=None,
         scheduler_params={},
         threads=None,
@@ -672,6 +680,8 @@ class CNNClassifier(MLPClassifier):
         :type optimizer: torch optim class
         :param optimizer_params: optimizer parameters
         :type optimizer_params: dict
+        :param safe_batch: prevent gpu oom errors for large batches
+        :type safe_batch: bool
         :param scheduler: scheduler for dynamic learning rates
         :type scheduler: torch optim.lr_scheduler class or None
         :param scheduler_params: scheduler parameters
@@ -693,6 +703,7 @@ class CNNClassifier(MLPClassifier):
             loss,
             optimizer,
             optimizer_params,
+            safe_batch,
             scheduler,
             scheduler_params,
             threads,
@@ -727,8 +738,12 @@ class CNNClassifier(MLPClassifier):
         # assemble convolutional and linear layers
         convolutional = itertools.chain.from_iterable(
             zip(
-                map(torch.nn.LazyConv2d, self.conv_layers),
-                (self.activation()) * len(self.conv_layers),
+                map(
+                    torch.nn.LazyConv2d,
+                    self.conv_layers,
+                    itertools.repeat(self.kernel_size),
+                ),
+                (self.activation(),) * len(self.conv_layers),
                 (torch.nn.MaxPool2d(self.kernel_size),) * len(self.conv_layers),
             )
         )
