@@ -7,6 +7,7 @@ Author: Ryan Sheatsley and Blaine Hoak
 Mon Nov 21 2022
 """
 import collections  # Container datatypes
+import sktorch.models as models  # flexible pytorch-based models with scikit-learn-like interfaces
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 
 # TODO
@@ -15,7 +16,7 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # add unit test
 
 Dataset = collections.namedtuple(
-    "Dataset", ["CNNClassifier", "MLPClassifier", "LinearClassifier", "adv"]
+    "Dataset", [m for m in dir(models) if type(getattr(models, m)) is type] + ["adv"]
 )
 """
 CIC-MalMem-2022 (https://www.unb.ca/cic/datasets/malmem-2022.html) is for
@@ -26,6 +27,7 @@ memory dumps. The state-of-the-art MLP accuracy is 61%
 (https://pdfs.semanticscholar.org/b2e2/0dc7a34753311472a5f2314fbf866d7eddd0.pdf).
 """
 cicmalmem2022 = Dataset(
+    None,
     None,
     dict(
         activation=torch.nn.ReLU,
@@ -40,7 +42,6 @@ cicmalmem2022 = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
-    None,
     None,
 )
 """
@@ -68,6 +69,7 @@ fmnist = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
+    None,
     dict(
         activation=torch.nn.ReLU,
         batch_size=64,
@@ -82,7 +84,6 @@ fmnist = Dataset(
         scheduler_params={},
     ),
     None,
-    None,
 )
 
 """
@@ -94,6 +95,7 @@ current state-of-the-art MLP accuracy is ~82%
 (https://www.ee.ryerson.ca/~bagheri/papers/cisda.pdf).
 """
 nslkdd = Dataset(
+    None,
     None,
     dict(
         activation=torch.nn.ReLU,
@@ -108,7 +110,6 @@ nslkdd = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
-    None,
     None,
 )
 """
@@ -133,6 +134,7 @@ mnist = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
+    None,
     dict(
         activation=torch.nn.ReLU,
         batch_size=64,
@@ -147,7 +149,6 @@ mnist = Dataset(
         scheduler_params={},
     ),
     None,
-    None,
 )
 """
 The Phishing Dataset for Machine Learning: Feature Evaluation
@@ -158,6 +159,7 @@ accuracy is 96%
 (https://www.sciencedirect.com/science/article/pii/S0020025519300763).
 """
 phishing = Dataset(
+    None,
     None,
     dict(
         activation=torch.nn.ReLU,
@@ -173,7 +175,6 @@ phishing = Dataset(
         scheduler_params={},
     ),
     None,
-    None,
 )
 """
 The UNSW-NB15 (https://research.unsw.edu.au/projects/unsw-nb15-dataset) is a
@@ -183,6 +184,7 @@ different attacks families and benign. The state-of-the-art MLP accuracy is 81%
 (https://www.sciencedirect.com/science/article/pii/S0957417419300843).
 """
 unswnb15 = Dataset(
+    None,
     None,
     dict(
         activation=torch.nn.ReLU,
@@ -197,7 +199,6 @@ unswnb15 = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
-    None,
     None,
 )
 
