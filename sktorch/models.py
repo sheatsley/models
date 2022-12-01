@@ -49,6 +49,7 @@ class LinearClassifier:
         safe_batch=True,
         scheduler=None,
         scheduler_params={},
+        template=None,
         threads=None,
         verbosity=0.25,
     ):
@@ -58,7 +59,10 @@ class LinearClassifier:
         Importantly, models are not usable until they are trained (via fit()),
         this "lazy" model creation schema allows us to abstract parameterizing
         of number of features and labels (thematically similar to scikit-learn
-        model classes) on initialization.
+        model classes) on initialization. Notably, the template argument
+        automatically sets all parameters from dataset objects in the
+        architectures module. When parameters are specified in addition to a
+        supplied template, template parameters are overridden.
 
         :param batch_size: training batch size (-1 for 1 batch)
         :type batch_size: int
@@ -78,6 +82,8 @@ class LinearClassifier:
         :type scheduler: torch optim.lr_scheduler class or None
         :param scheduler_params: scheduler parameters
         :type scheduler_params: dict
+        :param template: architecture template from architectures module
+        :type template: architectures dataset object
         :param threads: number of cpu threads used for training
         :type threads: int or None (for max threads)
         :param verbosity: print training statistics every verbosity%
@@ -85,7 +91,10 @@ class LinearClassifier:
         :return: a linear classifier skeleton
         :rtype: LinearClassifier object
         """
+
+        # extract template, if provided, and set parameters
         super().__init__()
+        locals().update(getattr(template, type(self).__name__))
         self.batch_size = batch_size
         self.iters = iters
         self.learning_rate = learning_rate
@@ -513,6 +522,7 @@ class MLPClassifier(LinearClassifier):
         safe_batch=True,
         scheduler=None,
         scheduler_params={},
+        template=None,
         threads=None,
         verbosity=0.25,
     ):
@@ -565,9 +575,11 @@ class MLPClassifier(LinearClassifier):
             safe_batch,
             scheduler,
             scheduler_params,
+            template,
             threads,
             verbosity,
         )
+        locals().update(getattr(template, type(self).__name__))
         self.activation = activation
         self.dropout = dropout
         self.hidden_layers = hidden_layers
@@ -647,6 +659,7 @@ class CNNClassifier(MLPClassifier):
         safe_batch=True,
         scheduler=None,
         scheduler_params={},
+        template=None,
         threads=None,
         verbosity=0.25,
     ):
@@ -706,9 +719,11 @@ class CNNClassifier(MLPClassifier):
             safe_batch,
             scheduler,
             scheduler_params,
+            template,
             threads,
             verbosity,
         )
+        locals().update(getattr(template, type(self).__name__))
         self.conv_layers = conv_layers
         self.kernel_size = kernel_size
         self.params.update({"conv_layers": conv_layers, "kernel_size": kernel_size})
