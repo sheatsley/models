@@ -149,7 +149,7 @@ class LinearClassifier:
         :return: the desired attribute (if it exists)
         :rtype: misc
         """
-        return self.model.__getattribute__(name)
+        return self.__getattribute__("model").__getattribute(name)
 
     def __repr__(self):
         """
@@ -159,7 +159,7 @@ class LinearClassifier:
         :return: algorithms used and hyperparameters
         :rtype: str
         """
-        return f"{type(self).__name__}({self.params})"
+        return f"{type(self).__name__}{*(f'{p}={v}' for p, v in self.params.items()),}"
 
     def accuracy(self, x, y):
         """
