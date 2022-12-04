@@ -159,7 +159,8 @@ class LinearClassifier:
         :return: algorithms used and hyperparameters
         :rtype: str
         """
-        return f"{type(self).__name__}{*(f'{p}={v}' for p, v in self.params.items()),}"
+        params = (f"{p}={v}" for p, v in self.params.items())
+        return f"{self.__class__.__name__}({', '.join(params)})"
 
     def accuracy(self, x, y):
         """
