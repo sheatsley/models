@@ -5,7 +5,9 @@ Author: Ryan Sheatsley & Blaine Hoak
 Mon Oct 24 2022
 """
 import itertools  # Functions creating iterators for efficient looping
+import sktorch.utilities as utilities  # miscellaneous utility functions
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
+
 
 # TODO
 # add vgg
@@ -13,6 +15,7 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # consider better debugging when field in architectures is not specified (eg adv_train)
 # confirm if https://github.com/pytorch/pytorch/issues/8741 works for cpu method
 # provide cleaner implementation of shape for CNNs in LinearClassifier
+# move this module into __init__.py
 
 
 class LinearClassifier:
@@ -149,7 +152,7 @@ class LinearClassifier:
         :return: the desired attribute (if it exists)
         :rtype: misc
         """
-        return self.__getattribute__("model").__getattribute(name)
+        return self.__getattribute__("model").__getattribute__(name)
 
     def __repr__(self):
         """
@@ -334,7 +337,8 @@ class LinearClassifier:
             # perform one iteration of training
             for xb, yb in trainset:
                 self.model.requires_grad_(False)
-                xb = self.atk.craft(xb, yb) if atk else xb
+                with utilities.supress_stdout(not (current_iter + 1) % self.verbosity):
+                    xb = self.atk.craft(xb, yb) if atk else xb
                 self.model.requires_grad_(True)
                 batch_logits = self(xb)
                 batch_loss = self.loss(batch_logits, yb)
@@ -387,7 +391,7 @@ class LinearClassifier:
         if atk:
             atk_logits = self.model(self.atk.craft(x, y))
             atk_loss = f"{self.loss(atk_logits, y).item():.3f}"
-            atk_acc = f"{atk_logits.argmax(1).eq(yb).sum().div(y.numel()).item():.1%}"
+            atk_acc = f"{atk_logits.argmax(1).eq(y).sum().div(y.numel()).item():.1%}"
             print("Adversarial Loss:", atk_loss, "Adversarial Acc:", atk_acc)
         return self
 
