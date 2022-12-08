@@ -3,23 +3,7 @@ The utilities module defines functions used throughout dlm.
 Author: Ryan Sheatsley
 Tue Dec 6 2022
 """
-import builtins  # Built-in objects
 import contextlib  # Utilities for with-statement contexts
-import time  # Time access and conversions
-
-
-def print(*args, **kwargs):
-    """
-    This function wraps the print function, prepended with a timestamp.
-
-    :param *args: positional arguments supported by print()
-    :type *args: tuple
-    :param **kwargs: keyword arguments supported by print()
-    :type **kwargs: dictionary
-    :return: None
-    :rtype: NoneType
-    """
-    return builtins.print(f"[{time.asctime()}]", *args, **kwargs)
 
 
 @contextlib.contextmanager
