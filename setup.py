@@ -1,5 +1,5 @@
 """
-Build script for Scikit-Torch
+Build script for Deep Learning Models
 Author: Ryan Sheatsley
 Date: Mon Nov 21 2022
 """
@@ -19,7 +19,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Scientific/Engineering :: Information Analysis",
     ],
-    description="A PyTorch-based Scikit-Learn-inspired machine learning library",
+    description="A PyTorch-based Scikit-Learn-inspired deep learning library",
     install_requires=[
         "torch",
     ],
@@ -27,9 +27,9 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     keywords="machine-learning pytorch scikit-learn",
-    name="sktorch",
+    name="dlm",
     packages=setuptools.find_packages(),
     python_requires=">=3.10",
-    url="https://github.com/sheatsley/scikit-torch",
-    version="0.9.0",
+    url="https://github.com/sheatsley/models",
+    version="0.9.1",
 )
