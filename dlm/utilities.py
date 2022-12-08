@@ -1,5 +1,5 @@
 """
-The utilities module defines functions used throughout Scikit-Torch.
+The utilities module defines functions used throughout dlm.
 Author: Ryan Sheatsley
 Tue Dec 6 2022
 """
