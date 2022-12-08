@@ -7,7 +7,7 @@ Author: Ryan Sheatsley and Blaine Hoak
 Mon Nov 21 2022
 """
 import collections  # Container datatypes
-import sktorch.models as models  # flexible pytorch-based models with scikit-learn-like interfaces
+import dlm  # flexible pytorch-based models with scikit-learn-like interfaces
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 
 # TODO
@@ -16,7 +16,7 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # add unit test
 
 Dataset = collections.namedtuple(
-    "Dataset", [m for m in dir(models) if type(getattr(models, m)) is type] + ["adv"]
+    "Dataset", [m for m in dir(dlm) if type(getattr(dlm, m)) is type] + ["adv"]
 )
 """
 CIC-MalMem-2022 (https://www.unb.ca/cic/datasets/malmem-2022.html) is for
