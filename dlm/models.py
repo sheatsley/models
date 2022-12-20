@@ -11,6 +11,9 @@ import dlm.utilities as utilities  # miscellaneous utility functions
 import itertools  # Functions creating iterators for efficient looping
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 
+# TODO
+# add an examples directory showing plotting, etc.
+
 
 class LinearClassifier:
     """
@@ -164,8 +167,8 @@ class LinearClassifier:
         This method returns the fraction of inputs classified correctly over
         the total number of samples. Additionally, a boolean tensor containing
         which inputs were classified correctly is stored (which is useful for
-        attacks that leverage this information, e.g., APGD, as shown in
-        https://arxiv.org/abs/2003.01690).
+        attacks that leverage this information, e.g., FAB, as shown in
+        https://arxiv.org/pdf/1907.02044.pdf).
 
         :param x: batch of inputs
         :type x: torch Tensor object (n, m)
@@ -354,7 +357,7 @@ class LinearClassifier:
 
             # print learning statistics every verbosity%
             print(
-                f"Iter: {current_iter + 1}/{self.iters}",
+                f"Iter: {current_iter + 1:{len(str(self.iters))}}/{self.iters}",
                 f"Loss: {iter_loss:.2f}",
                 f"({iter_loss - sum(self.stats['train_loss'][-2:-1]):+6.2f})",
                 f"Accuracy: {iter_acc:.1%}",
