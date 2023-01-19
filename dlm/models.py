@@ -156,10 +156,7 @@ class LinearClassifier:
     def accuracy(self, x, y):
         """
         This method returns the fraction of inputs classified correctly over
-        the total number of samples. Additionally, a boolean tensor containing
-        which inputs were classified correctly is stored (which is useful for
-        attacks that leverage this information, e.g., FAB, as shown in
-        https://arxiv.org/pdf/1907.02044.pdf).
+        the total number of samples.
 
         :param x: batch of inputs
         :type x: torch Tensor object (n, m)
@@ -168,9 +165,7 @@ class LinearClassifier:
         :return: model accuracy
         :rtype: torch Tensor object (1,)
         """
-        correct = self(x, False).argmax(1).eq(y)
-        self.correct = correct
-        return correct.sum().div(y.numel())
+        return self(x, False).argmax(1).eq(y).sum().div(y.numel())
 
     def build(self, x, y):
         """
