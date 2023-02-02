@@ -4,7 +4,7 @@ a variety of datasets from https://github.com/sheatsley/datasets. It strives to
 be a useful form of parameter bookkeeping to be passed directly as arguments to
 model initializations.
 Author: Ryan Sheatsley and Blaine Hoak
-Mon Nov 21 2022
+Thu Feb 2 2023
 """
 import collections  # Container datatypes
 import dlm.models as models  # flexible pytorch-based models with scikit-learn-like interfaces
