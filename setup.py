@@ -1,7 +1,7 @@
 """
 Build script for Deep Learning Models
-Author: Ryan Sheatsley
-Date: Mon Nov 21 2022
+Author: Ryan Sheatsley & Blaine Hoak
+Thu Feb 2 2023
 """
 import setuptools  # Easily download, build, install, upgrade, and uninstall Python packages
 
@@ -20,9 +20,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Information Analysis",
     ],
     description="A PyTorch-based Scikit-Learn-inspired deep learning library",
-    install_requires=[
-        "torch",
-    ],
+    install_requires=["torch"],
     license="BSD",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -31,5 +29,5 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     python_requires=">=3.10",
     url="https://github.com/sheatsley/models",
-    version="0.9.1",
+    version="1.0.0",
 )
