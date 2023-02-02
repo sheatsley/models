@@ -1,11 +1,11 @@
 """
-This module defines the core for the deep learning models repo. All
-supported deep learning models are defined here, with the LinearClassifier
-class defining the primary features across all models (which all inherit from
+This module defines the core for the deep learning models repo. All supported
+deep learning models are defined here, with the LinearClassifier class defining
+the primary features across all models (which all inherit from
 LinearClassifier). Much like scikit-learn, these classes define simple
 interfaces to support rapid prototyping of standard deep learning models.
 Author: Ryan Sheatsley & Blaine Hoak
-Mon Oct 24 2022
+Thu Feb 2 2023
 """
 import dlm.utilities as utilities  # miscellaneous utility functions
 import itertools  # Functions creating iterators for efficient looping
@@ -13,6 +13,8 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 
 # TODO
 # add an examples directory showing plotting, etc.
+# update all hyperparameters
+# remove defaults
 
 
 class LinearClassifier:
@@ -151,7 +153,7 @@ class LinearClassifier:
         :rtype: str
         """
         params = (f"{p}={v}" for p, v in self.params.items())
-        return f"{self.__class__.__name__}({', '.join(params)})"
+        return f"{type(self).__name__}({', '.join(params)})"
 
     def accuracy(self, x, y):
         """
