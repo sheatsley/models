@@ -1,7 +1,7 @@
 """
 The utilities module defines functions used throughout dlm.
 Author: Ryan Sheatsley
-Tue Dec 6 2022
+Thu Feb 2 2023
 """
 import contextlib  # Utilities for with-statement contexts
 
