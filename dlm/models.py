@@ -31,6 +31,8 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # figure out chained warning thing
 # num classes should just be hardcoded as an hparam... (cant fit with small batch sizes to test)
 # adjust prints so that they match aml standard
+# change iters to epochs
+# figure out how to get a cleaner interface for epochs (and updating the dataframe in general)
 
 
 class LinearClassifier:
@@ -323,7 +325,7 @@ class LinearClassifier:
         )
         print(f"Training for {self.iters} iterations on {device}...")
         pt = ("train",) + (("val",) if validation else ()) + (("atk",) if atk else ())
-        metrics = (f"{p}_{m}" for p in pt for m in ("acc", "loss"))
+        metrics = ("epoch",) + tuple(f"{p}_{m}" for p in pt for m in ("acc", "loss"))
         self.stats = pandas.DataFrame(0.0, index=range(self.iters), columns=metrics)
         self.model.train()
         self.model.requires_grad_(True)
@@ -351,6 +353,7 @@ class LinearClassifier:
                 iter_acc += batch_logits.argmax(1).eq(yb).sum()
 
             # collect learning statistics every iteration
+            self.stats.epoch[current_iter] = current_iter
             self.stats.train_loss[current_iter] = iter_loss
             self.stats.train_acc[current_iter] = iter_acc.div_(y.numel()).item()
             if validation:
