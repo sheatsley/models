@@ -9,12 +9,28 @@ Thu Feb 2 2023
 """
 import dlm.utilities as utilities  # miscellaneous utility functions
 import itertools  # Functions creating iterators for efficient looping
+import pandas  # Python Data Analysis Library
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 
 # TODO
 # add an examples directory showing plotting, etc.
 # update all hyperparameters
 # remove defaults
+# add trades
+# add mart
+# update verbosity scheme to match aml
+# set statistics parameter to avoid computing robust and clean acc
+# for robust accuracy, unclear if we should compute it when a validation set is not passed?
+# probalby should add torch no grad when computing clean and robust acc
+# add cifar10 hparams
+# add imagenet hparams
+# remove hparam unittest
+# change hparam named tuple to hparams instead of datasets (aml calls it "templates")
+# resolve attaching attack in fit (tries to manually set attribute which is unsafe)
+# data loader representation is ugly
+# figure out chained warning thing
+# num classes should just be hardcoded as an hparam... (cant fit with small batch sizes to test)
+# adjust prints so that they match aml standard
 
 
 class LinearClassifier:
@@ -110,6 +126,7 @@ class LinearClassifier:
             "loss": loss.__name__,
             "optimizer": optimizer.__name__,
             "state": "skeleton",
+            "classes": 2,
         } | ({"lr_scheduler": scheduler.__name__} if scheduler else {})
         return None
 
@@ -249,7 +266,7 @@ class LinearClassifier:
         :param validation: hold-out set or proportion of training data use
         :type validation: tuple of torch Tensor objects or float
         :param atk: attack to use to perform adversarial training
-        :type atk: clevertorch attack object
+        :type atk: aml Attack object
         :param shape: original shape of x (channels, width, height)
         :type shape: tuple of ints
         :return: a trained linear classifier model
@@ -281,9 +298,9 @@ class LinearClassifier:
             y_val, y = y[perm_idx].tensor_split([num_val])
         else:
             x_val, y_val = validation
-        print(
+        validation and print(
             f"Validation set created with shape: {x_val.size()} × {y_val.size()}"
-        ) if validation else None
+        )
         trainset = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(x, y),
             batch_size=self.batch_size,
@@ -294,7 +311,7 @@ class LinearClassifier:
         # attach attack if performing adversarial training
         if atk:
             self.atk = atk
-            self.atk.model = self
+            # self.atk.model = self
             self.params["atk"] = repr(self.atk)
             print(f"Performing adversarial training with: {self.atk}")
 
@@ -305,11 +322,11 @@ class LinearClassifier:
             else f"cpu ({self.threads} threads)"
         )
         print(f"Training for {self.iters} iterations on {device}...")
+        pt = ("train",) + (("val",) if validation else ()) + (("atk",) if atk else ())
+        metrics = (f"{p}_{m}" for p in pt for m in ("acc", "loss"))
+        self.stats = pandas.DataFrame(0.0, index=range(self.iters), columns=metrics)
         self.model.train()
         self.model.requires_grad_(True)
-        self.stats = {"train_acc": [], "train_loss": []} | (
-            {"val_acc": [], "val_loss": []} if validation != 0 else {}
-        )
         max_threads = torch.get_num_threads()
         torch.set_num_threads(self.threads)
 
@@ -334,29 +351,43 @@ class LinearClassifier:
                 iter_acc += batch_logits.argmax(1).eq(yb).sum()
 
             # collect learning statistics every iteration
-            self.stats["train_loss"].append(iter_loss)
-            self.stats["train_acc"].append(iter_acc.div_(y.numel()).item())
+            self.stats.train_loss[current_iter] = iter_loss
+            self.stats.train_acc[current_iter] = iter_acc.div_(y.numel()).item()
             if validation:
                 val_logits = self(x_val, False)
                 val_loss = self.loss(val_logits, y_val).item()
                 val_acc = val_logits.argmax(1).eq(y_val).sum().div(y_val.numel()).item()
-                self.stats["val_loss"].append(val_loss)
-                self.stats["val_acc"].append(val_acc)
+                self.stats.val_loss[current_iter] = val_loss
+                self.stats.val_acc[current_iter] = val_acc
+            if atk:
+                atk_logits = self(self.atk.craft(x_val, y_val), False)
+                atk_loss = self.loss(atk_logits, y_val).item()
+                atk_acc = atk_logits.argmax(1).eq(y_val).sum().div(y_val.numel()).item()
+                self.stats.atk_loss[current_iter] = atk_loss
+                self.stats.atk_acc[current_iter] = atk_acc
 
             # print learning statistics every verbosity%
             print(
                 f"Iter: {current_iter + 1:{len(str(self.iters))}}/{self.iters}",
                 f"Loss: {iter_loss:.2f}",
-                f"({iter_loss - sum(self.stats['train_loss'][-2:-1]):+6.2f})",
+                f"({iter_loss - self.stats.train_loss.iloc[-2]:+6.2f})",
                 f"Accuracy: {iter_acc:.1%}",
-                f"({iter_acc - sum(self.stats['train_acc'][-2:-1]):+6.1%})",
+                f"({iter_acc - self.stats.train_acc.iloc[-2]:+6.1%})",
                 *(
-                    f"Validation Loss: {self.stats['val_loss'][-1]:.2f}",
-                    f"({val_loss - sum(self.stats['val_loss'][-2:-1]):+6.2f})",
-                    f"Validation Acc: {self.stats['val_acc'][-1]:.1%}",
-                    f"({val_acc - sum(self.stats['val_acc'][-2:-1]):+6.1%})",
+                    f"Validation Loss: {val_loss:.2f}",
+                    f"({val_loss - self.stats.val_loss.iloc[-2]:+6.2f})",
+                    f"Validation Acc: {val_acc:.1%}",
+                    f"({val_acc - self.stats.val_acc.iloc[-2]:+6.1%})",
                 )
                 if validation
+                else "",
+                *(
+                    f"Attack Loss: {atk_loss:.2f}",
+                    f"({atk_loss - self.stats.atk_loss.iloc[-2]:+6.2f})",
+                    f"Attack Acc: {atk_acc:.1%}",
+                    f"({atk_acc - self.stats.atk_acc.iloc[-2]:+6.1%})",
+                )
+                if atk
                 else "",
             ) if not (current_iter + 1) % self.verbosity else None
 
@@ -373,11 +404,6 @@ class LinearClassifier:
             f"adversarially trained ({atk.name})" if atk else "trained"
         )
         self.model.eval()
-        if atk:
-            atk_logits = self.model(self.atk.craft(x, y))
-            atk_loss = f"{self.loss(atk_logits, y).item():.3f}"
-            atk_acc = f"{atk_logits.argmax(1).eq(y).sum().div(y.numel()).item():.1%}"
-            print("Adversarial Loss:", atk_loss, "Adversarial Acc:", atk_acc)
         return self
 
     def max_batch_size(self, grad=False, lower=1, upper=500000, utilization=0.95):
@@ -753,8 +779,3 @@ class CNNClassifier(MLPClassifier):
         return torch.nn.Sequential(
             torch.nn.Unflatten(1, shape), *convolutional, torch.nn.Flatten(), *linear
         )
-
-
-if __name__ == "__main__":
-    """ """
-    raise SystemExit(0)
