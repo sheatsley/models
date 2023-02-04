@@ -10,10 +10,6 @@ import collections  # Container datatypes
 import dlm.models as models  # flexible pytorch-based models with scikit-learn-like interfaces
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 
-# TODO
-# add cifar10
-# add imagenet
-# add unit test
 
 Dataset = collections.namedtuple(
     "Dataset", [m for m in dir(models) if type(getattr(models, m)) is type] + ["adv"]
