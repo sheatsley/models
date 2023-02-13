@@ -14,5 +14,5 @@ import subprocess  # Subprocess management
 
 # compute version
 __version__ = subprocess.check_output(
-    ("git", "rev-parse", "--short", "HEAD"), text=True
+    ("git", "-C", *__path__, "rev-parse", "--short", "HEAD"), text=True
 ).strip()
