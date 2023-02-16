@@ -1,19 +1,15 @@
 """
 This module defines the state-of-the-art architectures and hyperparameters for
-a variety of datasets from https://github.com/sheatsley/datasets. It strives to
-be a useful form of parameter bookkeeping to be passed directly as arguments to
-model initializations.
+a variety of datasets from https://github.com/sheatsley/datasets. It serves as
+a form of bookkeeping to be passed as arguments to model instantiations.
 Author: Ryan Sheatsley and Blaine Hoak
 Thu Feb 2 2023
 """
 import collections  # Container datatypes
-import dlm.models as models  # flexible pytorch-based models with scikit-learn-like interfaces
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 
-
-Dataset = collections.namedtuple(
-    "Dataset", [m for m in dir(models) if type(getattr(models, m)) is type] + ["adv"]
-)
+# Templates are provided for linear models, mlps, cnns, & adversarial training
+Template = collections.namedtuple("Template", ("linear", "mlp", "cnn", "at"))
 """
 CIC-MalMem-2022 (https://www.unb.ca/cic/datasets/malmem-2022.html) is for
 predicting malware categories and benign applciations. It has four labels that
@@ -22,15 +18,17 @@ dataset was designed to test obfuscated malware detection methods through
 memory dumps. The state-of-the-art MLP accuracy is 61%
 (https://pdfs.semanticscholar.org/b2e2/0dc7a34753311472a5f2314fbf866d7eddd0.pdf).
 """
-cicmalmem2022 = Dataset(
-    None,
+cicmalmem2022 = Template(
     None,
     dict(
         activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
         batch_size=128,
+        classes=4,
         dropout=0.0,
+        epochs=5,
         hidden_layers=(32,),
-        iters=180,
         learning_rate=1e-2,
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
@@ -38,6 +36,7 @@ cicmalmem2022 = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
+    None,
     None,
 )
 """
@@ -49,14 +48,34 @@ dataset was designed as a drop-in replacemnt for the original MNIST dataset for
 benchmarking machine learning algorithms. The state-of-the-art CNN accuracy is
 over 99% (https://arxiv.org/pdf/2001.00526.pdf).
 """
-fmnist = Dataset(
+fmnist = Template(
+    None,
     dict(
         activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
         batch_size=64,
+        classes=10,
+        dropout=0.0,
+        epochs=8,
+        hidden_layers=(512, 256, 100),
+        learning_rate=1e-2,
+        loss=torch.nn.CrossEntropyLoss,
+        optimizer=torch.optim.Adam,
+        optimizer_params={},
+        scheduler=None,
+        scheduler_params={},
+    ),
+    dict(
+        activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
+        batch_size=64,
+        classes=10,
         conv_layers=(16, 32),
         dropout=0.4,
+        epochs=20,
         hidden_layers=(512,),
-        iters=20,
         kernel_size=3,
         learning_rate=1e-3,
         loss=torch.nn.CrossEntropyLoss,
@@ -66,22 +85,7 @@ fmnist = Dataset(
         scheduler_params={},
     ),
     None,
-    dict(
-        activation=torch.nn.ReLU,
-        batch_size=64,
-        dropout=0.0,
-        hidden_layers=(512, 256, 100),
-        iters=8,
-        learning_rate=1e-2,
-        loss=torch.nn.CrossEntropyLoss,
-        optimizer=torch.optim.Adam,
-        optimizer_params={},
-        scheduler=None,
-        scheduler_params={},
-    ),
-    None,
 )
-
 """
 The NSL-KDD (https://www.unb.ca/cic/datasets/nsl.html) contains extracted
 feature vectors from PCAPs that contain various information about traffic
@@ -90,15 +94,17 @@ attacks, network probes, user-to-root attacks, and remote-to-local attacks. The
 current state-of-the-art MLP accuracy is ~82%
 (https://www.ee.ryerson.ca/~bagheri/papers/cisda.pdf).
 """
-nslkdd = Dataset(
-    None,
+nslkdd = Template(
     None,
     dict(
         activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
         batch_size=128,
+        classes=5,
         dropout=0.0,
+        epochs=4,
         hidden_layers=(60, 32),
-        iters=4,
         learning_rate=1e-2,
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
@@ -106,6 +112,7 @@ nslkdd = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
+    None,
     None,
 )
 """
@@ -114,30 +121,36 @@ handwritten digits. It has ten labels that describe a particular digit, "0"
 through "9". The state-of-the-art CNN accuracy is over 99%
 (https://arxiv.org/pdf/1710.09829.pdf).
 """
-mnist = Dataset(
+mnist = Template(
+    None,
     dict(
         activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
         batch_size=64,
-        conv_layers=(16, 32),
-        dropout=0.4,
-        hidden_layers=(128,),
-        iters=20,
-        kernel_size=3,
-        learning_rate=1e-3,
+        classe=10,
+        dropout=0.0,
+        hidden_layers=(512,),
+        epochs=20,
+        learning_rate=1e-2,
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
         optimizer_params={},
         scheduler=None,
         scheduler_params={},
     ),
-    None,
     dict(
         activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
         batch_size=64,
-        dropout=0.0,
-        hidden_layers=(512,),
-        iters=20,
-        learning_rate=1e-2,
+        classes=10,
+        conv_layers=(16, 32),
+        dropout=0.4,
+        epochs=20,
+        hidden_layers=(128,),
+        kernel_size=3,
+        learning_rate=1e-3,
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
         optimizer_params={},
@@ -154,15 +167,17 @@ and URLs. It has two classes, malicous and benign. The state-of-the-art MLP
 accuracy is 96%
 (https://www.sciencedirect.com/science/article/pii/S0020025519300763).
 """
-phishing = Dataset(
-    None,
+phishing = Template(
     None,
     dict(
         activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
         batch_size=32,
+        classes=2,
         dropout=0.0,
+        epochs=40,
         hidden_layers=(15,),
-        iters=40,
         learning_rate=1e-2,
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
@@ -170,6 +185,7 @@ phishing = Dataset(
         scheduler=None,
         scheduler_params={},
     ),
+    None,
     None,
 )
 """
@@ -179,15 +195,18 @@ with sythetically generated attacks. It contains ten classes, with nine
 different attacks families and benign. The state-of-the-art MLP accuracy is 81%
 (https://www.sciencedirect.com/science/article/pii/S0957417419300843).
 """
-unswnb15 = Dataset(
+unswnb15 = Template(
     None,
     None,
     dict(
         activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
         batch_size=128,
+        classes=10,
         dropout=0.0,
+        epochs=40,
         hidden_layers=(15,),
-        iters=40,
         learning_rate=1e-2,
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
@@ -197,13 +216,3 @@ unswnb15 = Dataset(
     ),
     None,
 )
-
-if __name__ == "__main__":
-    """
-    Prints parameters for all datasets (useful for debugging).
-    """
-    datasets = ("cicmalmem2022", "fmnist", "mnist", "phishing", "unswnb15")
-    for dataset in datasets:
-        for params in (dset := globals()[dataset])._fields:
-            print(f"{dataset} {params} parameters:", getattr(dset, params))
-    raise SystemExit(0)
