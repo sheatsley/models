@@ -7,7 +7,6 @@ support rapid prototyping of standard deep learning models.
 Author: Ryan Sheatsley & Blaine Hoak
 Thu Feb 2 2023
 """
-import dlm.utilities as utilities  # miscellaneous utility functions
 import itertools  # Functions creating iterators for efficient looping
 import pandas  # Python Data Analysis Library
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
@@ -15,18 +14,15 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # TODO
 # add an examples directory showing plotting, etc.
 # update all hyperparameters
-# remove defaults
 # add trades loss
 # add mart loss
+# add gtsrb hparams
 # add cifar10 hparams
-# remove hparam unittest
-# change hparam named tuple to hparams instead of datasets (aml calls it "templates")
 # figure out chained warning thing
-# change template to hyperparameters
-# redo repr
 # create thread benchmarks
 # support checkpoints
-# cleanup compile (pretty ugly)
+# upgrade templates to classes to support static (eg classes) and mlp/cnn AT variants
+# drop utilities
 
 
 class LinearClassifier:
@@ -121,7 +117,7 @@ class LinearClassifier:
         self.optimizer_alg = optimizer
         self.optimizer_params = optimizer_params
         self.scheduler_alg = scheduler
-        self.schedular_params = scheduler_params
+        self.scheduler_params = scheduler_params
         self.threads = (
             torch.get_num_threads()
             if threads == -1
@@ -296,16 +292,13 @@ class LinearClassifier:
         max_threads = torch.get_num_threads()
         torch.set_num_threads(self.threads)
         self.model.train()
-        d = torch.cuda.get_device_name() if x.is_cuda else f"cpu ({self.threads})"
+        d = torch.cuda.get_device_name() if x.is_cuda else f"{self.threads} cpu threads"
         print(
             f"Performing {'' if self.attack is None else 'adversarial'} training",
             f"{'' if self.attack is None else f'with {self.attack}'}",
             f"for {self.epochs} epochs on {d}...",
         )
-
-        # enter main training loop; apply scheduler and reset epoch loss
         for e in range(1, self.epochs + 1):
-            self.scheduler is not None and self.scheduler.step()
             tloss = tacc = 0
 
             # perform one iteration of training
@@ -322,9 +315,10 @@ class LinearClassifier:
                 self.model.requires_grad_(False)
                 tloss += loss.detach()
                 tacc += logits.detach().argmax(1).eq_(yb).sum()
+            self.scheduler is not None and self.scheduler.step()
 
             # compute training statistics every epoch and update results
-            prog = self.progress(tacc.mean().item(), tloss.item(), vset)
+            prog = self.progress(e, tacc.div(y.numel()).item(), tloss.item(), vset)
             print(
                 f"Epoch {e:{len(str(self.epochs))}} / {self.epochs} {prog}"
             ) if verbose and not e % self.verbosity else print(
@@ -362,8 +356,9 @@ class LinearClassifier:
         :rtype: tuple of torch.utils.data DataLoader objects
         """
 
-        # initialize model and instantiate optimizer, scheduler, & attack
+        # initialize model and instantiate loss, optimizer, scheduler, & attack
         self.model(x[:1])
+        self.loss = self.loss_func()
         self.optimizer = self.optimizer_alg(
             self.model.parameters(), lr=self.learning_rate, **self.optimizer_params
         )
@@ -375,11 +370,11 @@ class LinearClassifier:
         self.attack = (
             None
             if self.attack_alg is None
-            else self.attack_alg(**self.attack_params | {"model": self.model})
+            else self.attack_alg(**self.attack_params | {"model": self})
         )
 
         # find max batch size, build validation set, and prepare data loader
-        self.auto_batch and self.max_batch_size()
+        self.max_batch = self.max_batch_size() if self.auto_batch else None
         dataset = torch.utils.data.TensorDataset(x, y)
         if isinstance(valset, float):
             nval = int(y.numel() * valset)
@@ -393,7 +388,7 @@ class LinearClassifier:
             nval = len(vsub)
             ntrain = len(tsub)
         tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True)
-        vset = torch.utils.data.DataLoader(vsub, len(vsub))
+        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
         print(f"Training set: ({ntrain}, {x.size(1)}) × ({ntrain},)")
         len(vsub) != 0 and print(f"Validation set: ({nval}, {x.size(1)}) × ({nval},)")
 
@@ -493,49 +488,56 @@ class LinearClassifier:
         vacc = vloss = aacc = aloss = 0
         vstr = astr = ""
         if len(vset) > 0:
-            vx, vy = vset
+            vx, vy = next(iter(vset))
             logits = self(vx, grad_enabled=False)
             vloss = self.loss(logits, vy).item()
-            vacc = logits.argmax(1).eq_(vy).mean().item()
+            vacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
             vstr = (
-                f"Validation Acc: {vacc:.1%}",
-                f"({vacc - self.res.validation_accuracy.iloc[-2]:+6.2%})",
-                f"Validation Loss {vloss:.2f}"
-                f"({vloss - self.res.validation_loss.iloc[-2]:+6.2f}) ",
+                f"Val Acc: {vacc:.1%} "
+                f"({vacc - self.res.validation_accuracy.iloc[-2]:+.2%}) "
+                f"Val Loss {vloss:.2f} "
+                f"({vloss - self.res.validation_loss.iloc[-2]:+.2f}) "
             )
 
             # compute adversarial metrics and str representation
             if self.attack is not None:
                 logits = self(self.attack.craft(vx, vy, reset=True), grad_enabled=False)
                 aloss = self.loss(logits, vy).item()
-                aacc = logits.argmax(1).eq_(vy).mean().item()
+                aacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
                 astr = (
-                    f"Adversarial Acc: {aacc:.1%}",
-                    f"({aacc - self.res.adversarial_accuracy.iloc[-2]:+6.2%})",
-                    f"Adversarial Loss: {aloss:.2f}",
-                    f"({aloss - self.res.adversarial_loss.iloc[-2]:+6.2f})",
+                    f"Adv Acc: {aacc:.1%} "
+                    f"({aacc - self.res.adversarial_accuracy.iloc[-2]:+.2%}) "
+                    f"Adv Loss: {aloss:.2f} "
+                    f"({aloss - self.res.adversarial_loss.iloc[-2]:+.2f}) "
                 )
         self.res.loc[e] = e, tacc, tloss, vacc, vloss, aacc, aloss
 
         # build str representation and return
         return (
-            f"Accuracy: {tacc:.1%}",
-            f"({tacc - self.res.training_accuracy.iloc[-2]:+6.2%})",
-            f"Loss: {tloss:.2f}",
-            f"({tloss - self.res.training_loss.iloc[-2]:+6.2f})",
-            vstr,
-            astr,
+            f"Accuracy: {tacc:.1%} "
+            f"({tacc - self.res.training_accuracy.iloc[-2]:+.2%}) "
+            f"Loss: {tloss:.2f} "
+            f"({tloss - self.res.training_loss.iloc[-2]:+.2f}) "
+            f"{vstr}{astr}"
         )
 
-    def load(self, path):
+    def load(self, path, features=None):
         """
         This method loads pretrained PyTorch model parameters. Specifically,
         this supports loading either: (1) complete models (e.g., trained torch
         Sequential containers), or (2) trained parameters (e.g., state_dict).
         Notably, either object is assumed to saved via torch.save(). Finally,
         many of the useful attributes set during fit are estimated from the
-        model directly (e.g., number of features, classes, etc.) and the
-        maximum batch size is computed if auto_batch is True.
+        model directly (e.g., number of features, classes, etc.), the model is
+        put into inference mode, and the maximum batch size is computed if
+        auto_batch is True. 
+
+        Notably, there is some complexity in loading state dictionaries with
+        lazy modules in that they *must* be initialized before the state dict
+        can be loaded. To this end, if a torch.nn Sequential object is not an
+        attribute of this class, then the number of input features and clases
+        are inferred from the state dict, compile is called, and model is
+        initialized through a dry run.
 
         :param path: path to the pretrained model
         :type path: pathlib Path object
@@ -547,10 +549,17 @@ class LinearClassifier:
             self.model.load_state_dict(model)
         except TypeError:
             self.model = model
+
+        # dry run is required before loading state dicts with lazy modules
+        except AttributeError:
+            features = 
+            classes = 
+
         self.params["features"] = model[0].in_features
         self.params["classes"] = model[-1].out_features
         self.params["state"] = "pretrained"
         self.summary()
+        self.model.eval()
         self.auto_batch and self.max_batch_size()
         return self
 
@@ -614,7 +623,6 @@ class MLPClassifier(LinearClassifier):
         activation,
         dropout,
         hidden_layers,
-        shape,
         **lc_args,
     ):
         """
@@ -658,15 +666,13 @@ class MLPClassifier(LinearClassifier):
         :return: an untrained multi-layer linear classifier
         :rtype: torch.nn Sequential object
         """
+        components = (
+            [torch.nn.Dropout(self.dropout)],
+            map(torch.nn.LazyLinear, self.hidden_layers),
+            [self.activation()],
+        )
         return torch.nn.Sequential(
-            *itertools.chain.from_iterable(
-                zip(
-                    (torch.nn.Dropout(self.dropout),) * len(self.hidden_layers),
-                    map(torch.nn.LazyLinear, self.hidden_layers),
-                    (self.activation(),) * len(self.hidden_layers),
-                )
-            ),
-            torch.nn.LazyLinear(self.classes),
+            *itertools.chain(*itertools.product(*components)), *super().compile()
         )
 
 
@@ -749,24 +755,18 @@ class CNNClassifier(MLPClassifier):
         :rtype: torch Sequential object
         """
 
-        # assemble convolutional and linear layers
-        convolutional = itertools.chain.from_iterable(
-            zip(
-                map(
-                    torch.nn.LazyConv2d,
-                    self.conv_layers,
-                    itertools.repeat(self.kernel_size),
-                ),
-                (self.activation(),) * len(self.conv_layers),
-                (torch.nn.MaxPool2d(self.kernel_size),) * len(self.conv_layers),
-            )
+        # assemble convolutional layers
+        convolutional = (
+            [torch.nn.Dropout(self.dropout)],
+            map(lambda c: torch.nn.LazyConv2d(c, self.kernel_size), self.conv_layers),
+            [self.activation()],
+            [torch.nn.MaxPool2d(self.kernel_size)],
         )
-        linear = super().compile()
 
-        # attach unflatten and meld convolutional and linear layers with flatten
+        # unflatten and attach convolutional and linear layers with flatten
         return torch.nn.Sequential(
             torch.nn.Unflatten(1, self.shape),
-            *convolutional,
+            *itertools.chain(*itertools.product(*convolutional)),
             torch.nn.Flatten(),
-            *linear,
+            *super().compile(),
         )
