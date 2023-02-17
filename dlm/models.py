@@ -19,9 +19,9 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # add gtsrb hparams
 # add cifar10 hparams
 # create thread benchmarks
-# support checkpoints
 # upgrade templates to classes to support static (eg classes) and mlp/cnn AT variants
-# drop utilities
+# add flags for training, inference, and crafting now that max gpu is correct
+# confirm models can be saved and loaded to from gpu cpu appropriately
 
 
 class LinearClassifier:
@@ -61,7 +61,7 @@ class LinearClassifier:
         optimizer_params,
         scheduler,
         scheduler_params,
-        auto_batch=True,
+        auto_batch=False,
         classes=None,
         threads=-1,
         verbosity=0.25,
@@ -399,70 +399,72 @@ class LinearClassifier:
         self.params["state"] = "untrained"
         return tset, vset
 
-    def max_batch_size(self, grad=False, lower=1, upper=500000, utilization=0.95):
+    def max_batch_size(self, lower=1, upper=500000):
         """
-        This method computes the maximum batch size usable for forward-only
-        (i.e., inference) and forward-backward (i.e., training) passes on gpus.
-        Specifically, this provides an abstraction so that large batch sizes
-        that would produce out-of-memory exceptions are automatically corrected
-        to smaller batches while maintaining maximum gpu utilization. This
-        method applies binary search on the batch size until the memory usage
-        is within the paramertized utilization. Afterwards, grad_batch and
-        nograd_batch attributes are exposed (and used appropriately in __call__
-        based on the value of grad). Notably, this method cannot be called when
-        model state is "skeleton."
+        This method computes the maximum possible batch size without causing
+        out-of-memory errors in gpus for three scenarios: (1) model training,
+        (2) inference, and (3) crafting adversarial examples. The optimal batch
+        size across these scenarios is determined via binary search. Notably,
+        this method should only be called when model state is not "skeleton"
+        (that is, the PyTorch sequential container has been instantiated and
+        its lazy modules initialized).
 
-        :param grad: find sizes for forward-backward only or including forward
-        :type grad: bool
         :param lower_batch: smallest batch size to consider
         :type lower_batch: int
-        :param stages: find forward-only (0) and/or forward-backward (1) sizes
-        :type stages: list of ints
         :param upper_batch: largest batch size to consider
         :type upper_batch: int
-        :param utilization: minimum percentage of memory to be used
-        :type utilization: float
-        :return: max batch sizes for forward-only and forward-backward passes
+        :return: max batch sizes for traing, inference, and crafting
         :rtype: tuple of ints
         """
+
+        # initialize stage tracking parameters
+        stage = 0
+        stages = "training", "inference", "crafting"
+        grad_req = True, False, True
+        sizes = [1] * len(stages)
+        utils = [0] * len(stages)
+        initial_lower = lower
+        initial_upper = upper
+        steps = torch.tensor(upper).log2().add(1).int().mul(3)
         features = self.params["features"]
-        stage_names = ("forward-pass-only", "forward-backward-passes")
-        stage = stage_names[grad]
         free_memory, max_memory = torch.cuda.mem_get_info()
-        print(f"Estimating {stage} maximum batch size...")
-        try:
 
-            # compute utilization
-            batch_size = (upper - lower) // 2
-            out = self.model(torch.empty((batch_size, features)), grad)
-            out.sum().backward() if grad else None
-            curr_util = torch.cuda.memory_allocated() / max_memory
-            print(f"{stage} utilization (batch size={batch_size}: {curr_util}")
+        # update stage state and track grads appropriately
+        self.model.requires_grad_(True)
+        for i in range(1, steps):
+            if i % (steps // 3) == 0:
+                stage += 1
+                lower = initial_lower
+                upper = initial_upper
+                if stage == 1:
+                    self.model.requires_grad_(False)
+            print(f"Computing {stages[stage]} batch sizes... {i / steps:.2%}", end="\r")
+            try:
 
-            # utilization target was met
-            if curr_util >= utilization:
-                print(f"{stage} utilization target met ({curr_util:.1%}!")
+                # compute utilization (memory peaks before backprop)
+                batch_size = (lower + upper) // 2
+                batch = torch.empty((batch_size, features), requires_grad=stage == 2)
+                out = self.model(batch)
+                util = torch.cuda.memory_allocated() / max_memory
+                grad_req[stage] and out.sum().backward()
 
-                # return forward-backward (keep forward size if found)
-                return (batch_size,) * 2 if grad else batch_size, self.max_batch_size(
-                    True, 1, batch_size, utilization
-                )[1]
+                # increase batch size and save largest viable batch size
+                lower = max(lower, batch_size)
+                sizes[stage] = max(sizes[stage], batch_size)
+                utils[stage] = max(utils[stage], util)
 
-            # required utilization is too high (search failed); drop by 5%
-            elif not batch_size:
-                utilization -= 0.05
-                print(f"Utilization is too strict! Dropping to {utilization:.0%}...")
-                return self.max_batch_size(grad, 1, 500000, utilization)
+            # gpu was oversubscribed; decrease batch size
+            except RuntimeError:
+                upper = min(upper, batch_size)
 
-            # utilization was below threshold;
-            return self.max_batch_size(grad, batch_size, upper, utilization)
-
-        # utilization was oversubscribed; cut batch size in half
-        except RuntimeError:
-            print(f"Out of memory for {stage} (batch_size={batch_size})!")
-            self.model.zero_grad(True)
+            # release resources
+            out = None
+            batch.grad = None
+            self.model.zero_grad(set_to_none=True)
             torch.cuda.empty_cache()
-            return self.max_batch_size(grad, lower, batch_size, utilization)
+        res = (f"{s} size: {b} ({u:.2%})," for s, b, u in zip(stages, sizes, utils))
+        print("Search complete.", *res)
+        return sizes
 
     def progress(self, e, tacc, tloss, vset):
         """
@@ -590,7 +592,7 @@ class LinearClassifier:
         :return: None
         :rtype: NoneType
         """
-        torch.save(self.model.state_dict() if slim else self.model, path)
+        torch.save(self.model.state_dict() if slim else self.model.cpu(), path)
         return None
 
     def summary(self):
