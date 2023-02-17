@@ -18,7 +18,6 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # add mart loss
 # add gtsrb hparams
 # add cifar10 hparams
-# figure out chained warning thing
 # create thread benchmarks
 # support checkpoints
 # upgrade templates to classes to support static (eg classes) and mlp/cnn AT variants
@@ -124,6 +123,7 @@ class LinearClassifier:
             else min(threads, torch.get_num_threads())
         )
         self.verbosity = max(int(epochs * verbosity), 1 if verbosity else 0)
+        self.max_batch = None
         self.params = {
             "attack": "N/A" if self.attack_alg is None else self.attack_alg.__name__,
             "classes": "TBD" if self.classes is None else self.classes,
@@ -374,7 +374,7 @@ class LinearClassifier:
         )
 
         # find max batch size, build validation set, and prepare data loader
-        self.max_batch = self.max_batch_size() if self.auto_batch else None
+        self.max_batch = self.max_batch_size() if self.auto_batch else self.max_batch
         dataset = torch.utils.data.TensorDataset(x, y)
         if isinstance(valset, float):
             nval = int(y.numel() * valset)
@@ -521,7 +521,7 @@ class LinearClassifier:
             f"{vstr}{astr}"
         )
 
-    def load(self, path, features=None):
+    def load(self, path):
         """
         This method loads pretrained PyTorch model parameters. Specifically,
         this supports loading either: (1) complete models (e.g., trained torch
@@ -530,9 +530,9 @@ class LinearClassifier:
         many of the useful attributes set during fit are estimated from the
         model directly (e.g., number of features, classes, etc.), the model is
         put into inference mode, and the maximum batch size is computed if
-        auto_batch is True. 
+        auto_batch is True.
 
-        Notably, there is some complexity in loading state dictionaries with
+        Notably, there are some subtlies in loading state dictionaries with
         lazy modules in that they *must* be initialized before the state dict
         can be loaded. To this end, if a torch.nn Sequential object is not an
         attribute of this class, then the number of input features and clases
@@ -544,19 +544,34 @@ class LinearClassifier:
         :return: a pretrained linear classifier model
         :rtype: LinearClassifier object
         """
+
+        # load model or state dict (and forcibly compile if necessary)
         model = torch.load(path)
-        try:
-            self.model.load_state_dict(model)
-        except TypeError:
+        if type(model) == torch.nn.Sequential:
             self.model = model
+        else:
+            try:
+                self.model.load_state_dict(model)
+            except AttributeError:
+                features = (
+                    torch.tensor(self.shape).prod()
+                    if hasattr(self, "shape")
+                    else next(iter(model.values())).size(1)
+                )
+                self.classes = next(reversed(model.values())).size(0)
+                self.model = self.compile()
+                self(torch.empty((1, features)), grad_enabled=False)
+                self.model.load_state_dict(model)
 
-        # dry run is required before loading state dicts with lazy modules
-        except AttributeError:
-            features = 
-            classes = 
-
-        self.params["features"] = model[0].in_features
-        self.params["classes"] = model[-1].out_features
+        # infer features, update parameters, and set model to inference
+        features = (
+            torch.tensor(self.model[0].unflattened_size).prod()
+            if type(self.model[0]) is torch.nn.Unflatten
+            else next(iter(self.model.state_dict().values())).size(0)
+        )
+        self.classes = self.model[-1].out_features
+        self.params["features"] = features
+        self.params["classes"] = self.classes
         self.params["state"] = "pretrained"
         self.summary()
         self.model.eval()
