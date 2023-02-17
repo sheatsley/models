@@ -21,14 +21,12 @@ class FunctionalTests(unittest.TestCase):
     tests verify: (1) model classes are functionally correct (in that they do
     not cause errors), (2) special functionalities (determining the maximum
     batch size on gpus, performing adversarial training, using validation sets,
-    loading and saving models, etc.) are functionally correct, and (3)
-    malformed inputs (such as empty hidden layers, etc.) cause errors (that is,
-    no silent failures occur).
+    loading and saving models, using checkpoints etc.) are correct.
 
     :func:`test_adversarial_training`: tests adversarial training subroutine
+    :func:`test_checkpoints`: tests checkpoint subroutine correctness
     :func:`test_gpu_oom`: tests gpu oom prevention correctness
     :func:`test_save_load`: tests saving and loading models
-    :func:`test_malformed_inputs`: tests malformed input handling capabilities
     :func:`test_models`: test model class correctness
     :func:`verify_cnn`: verifies cnn architectures
     :func:`verify_linear`: verifies linear model architectures
@@ -152,23 +150,40 @@ class FunctionalTests(unittest.TestCase):
                 )
         return None
 
-    def test_save_load(self):
+    def test_save_load(self, path="/tmp/"):
         """
         This method validates the correctness of model saving and loading
         subroutines. Specifically, these subroutines are considered to be
         functionally correct if models can be reinstantiated correctly after
         reading their structure from disk.
 
+        :param path: path to save and load models
+        :type path: str
         :return: None
         :rtype:NoneType
         """
-        for model_class, template in self.model_template_pairs:
+        for (model_class, template), slim in itertools.product(
+            self.model_template_pairs, (False, False)
+        ):
             print(f"Testing {model_class.__name__}...", end="\r")
-            with self.subTest(Model=f"{model_class.__name__}"):
-                model = model_class(**template)
-                model.fit(self.x, self.y)
-                model.save(f"/tmp/test_save_load_{model.__name__}")
+            with self.subTest(Model=f"{model_class.__name__}", Slim=slim):
 
+                # initialize models at various states
+                model = model_class(**template)
+                trained = model_class(**template)
+                skeleton = model_class(**template)
+                model.fit(self.x, self.y)
+                trained.fit(self.x, self.y)
+
+                # restore from full model and from state dicts
+                savepath = f"{path}dlm_test_{model_class.__name__}"
+                model.save(savepath, slim=slim)
+                trained.load(savepath)
+                skeleton.load(savepath)
+                self.assertMultiLineEqual(
+                    model.model.__repr__() * 2,
+                    trained.model.__repr__() + skeleton.model.__repr__(),
+                )
         return None
 
     def verify_cnn(
