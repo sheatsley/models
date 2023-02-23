@@ -110,6 +110,22 @@ class FunctionalTests(unittest.TestCase):
                 model.fit(self.x, self.y, (self.x, self.y))
         return None
 
+    def test_gpu_oom(self):
+        """
+        This method validates the correctness of the the max_batch_size
+        subroutine. Specifically, this subroutine is considered to be
+        functionally correct if exceptions are handled properly.
+
+        :return: None
+        :rtype: NoneType
+        """
+        for model, template in self.model_template_pairs:
+            print(f"Testing {model.__name__}...", end="\r")
+            with self.subTest(Model=f"{model.__name__}"):
+                model = model(**template | dict(auto_batch=True, device="cuda"))
+                model.fit(self.x, self.y, 0.10)
+        return None
+
     def test_models(self):
         """
         This method validates the correctness of model instantiations and their
