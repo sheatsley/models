@@ -19,9 +19,8 @@ import torch  # Tensors and Dynamic neural networks in Python with strong GPU ac
 # add gtsrb hparams
 # add cifar10 hparams
 # create thread benchmarks
-# upgrade templates to classes to support static (eg classes) and mlp/cnn AT variants
-# add flags for training, inference, and crafting now that max gpu is correct
 # confirm models can be saved and loaded to from gpu cpu appropriately
+# consider basic hyperparameter optimization class
 
 
 class LinearClassifier:
@@ -37,9 +36,6 @@ class LinearClassifier:
     :func:`__repr__`: returns parameters, optimizer, scheduler, and state
     :func:`accuracy`: returns model accuracy
     :func:`compile`: assembles a softmax regression model
-    :func:`cpu`: moves all tensors to cpu
-    :func:`cuda`: moves all tensors to gpu
-    :func:`cuda_or_cpu`: matches optimizer and scheduler states to model device
     :func:`fit`: performs model training
     :func:`init`: initializes training preqrequisites
     :func:`load`: load saved models
@@ -47,6 +43,7 @@ class LinearClassifier:
     :func:`progress`: records various statistics on training progress
     :func:`save`: save models parameters (or entire model state)
     :func:`summary`: prints model architecture
+    :func:`to`: synchronize the device for models, optimizers, and schedulers
     """
 
     def __init__(
@@ -63,6 +60,7 @@ class LinearClassifier:
         scheduler_params,
         auto_batch=False,
         classes=None,
+        device="cpu",
         threads=-1,
         verbosity=0.25,
     ):
@@ -80,10 +78,12 @@ class LinearClassifier:
         :type attack_params: dict
         :param auto_batch: determine max batch size for gpu vram
         :type auto_batch: bool
-        :param classes: number of classes
-        :type classes: int
         :param batch_size: training batch size (-1 for 1 batch)
         :type batch_size: int
+        :param classes: number of classes
+        :type classes: int
+        :param device: hardware device to use
+        :type device: str
         :param epochs: number of training iterations
         :type epochs: int
         :param learning_rate: learning rate
@@ -108,8 +108,9 @@ class LinearClassifier:
         self.attack_alg = attack
         self.attack_params = attack_params
         self.auto_batch = auto_batch
-        self.classes = classes
         self.batch_size = batch_size
+        self.classes = classes
+        self.device = device
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.loss_func = loss
@@ -124,6 +125,7 @@ class LinearClassifier:
         )
         self.verbosity = max(int(epochs * verbosity), 1 if verbosity else 0)
         self.max_batch = None
+        self.state = "skeleton"
         self.params = {
             "attack": "N/A" if self.attack_alg is None else self.attack_alg.__name__,
             "classes": "TBD" if self.classes is None else self.classes,
@@ -136,17 +138,17 @@ class LinearClassifier:
             "scheduler": "N/A"
             if self.scheduler_alg is None
             else self.scheduler_alg.__name__,
-            "state": "skeleton",
         }
         return None
 
     def __call__(self, x, grad_enabled=True):
         """
         This method returns the model logits. Optionally, gradient-tracking can
-        be disabled for fast inference. Notably, when using gpus, if auto_batch
-        was set to True on __init__, then inputs are auto-batched to sizes
-        (determined by max_batch_size) that will fit within GPU VRAM to prevent
-        out-of-memory errors.
+        be disabled for fast inference. Notably, when using nvidia gpus, if
+        auto_batch was set to True on __init__, then inputs are auto-batched to
+        sizes (determined by max_batch_size) that will fit within nvidia gpu
+        vram prevent out-of-memory errors depending on whether we are training
+        the model, performing inference, or crafting adversarial examples.
 
         :param x: the batch of inputs
         :type x: torch Tensor object (n, m)
@@ -155,9 +157,16 @@ class LinearClassifier:
         :return: model logits
         :rtype: torch Tensor object (n, c)
         """
+        stage = (
+            "inference"
+            if not grad_enabled
+            else "crafting"
+            if x.requires_grad
+            else "training"
+        )
+        split = x.size(0) if x.device.type != "cuda" else self.max_batch[stage]
         with torch.set_grad_enabled(grad_enabled):
-            xb = x.split(x.size(0) if self.max_batch is None else self.max_batch)
-            return torch.cat([self.model(x) for x in xb])
+            return torch.cat([self.model(xb) for xb in x.split(split)])
 
     def __getattr__(self, name):
         """
@@ -175,13 +184,13 @@ class LinearClassifier:
     def __repr__(self):
         """
         This method returns a concise string representation of parameters,
-        optimizer, scheduler, and state.
+        optimizer, scheduler, state, and hardware device.
 
         :return: algorithms used and hyperparameters
         :rtype: str
         """
-        params = (f"{p}={v}" for p, v in self.params.items())
-        return f"{type(self).__name__}({', '.join(params)})"
+        p = ", ".join(f"{p}={v}" for p, v in self.params.items())
+        return f"{type(self).__name__}({p}, state={self.state}, device={self.device})"
 
     def accuracy(self, x, y):
         """
@@ -207,57 +216,6 @@ class LinearClassifier:
         """
         return torch.nn.Sequential(torch.nn.LazyLinear(self.classes))
 
-    def cpu(self):
-        """
-        This method moves the model, optimizer, and scheduler to the cpu. At
-        this time, to and cpu methods are not supported for optimizers nor
-        schedulers (https://github.com/pytorch/pytorch/issues/41839), so we
-        leverage a trick shown in
-        https://github.com/pytorch/pytorch/issues/8741 to refresh the state of
-        optimizers and schedulers (as these subroutines match device state to
-        that of the attached parameters).
-
-        :return: linear classifier
-        :rtype: LinearClassifier object
-        """
-        self.model.cpu()
-        self.cuda_or_cpu()
-        return self
-
-    def cuda(self):
-        """
-        This method moves the model, optimizer, and scheduler to the gpu. At
-        this time, to() and cuda() methods are not supported for optimizers nor
-        schedulers (https://github.com/pytorch/pytorch/issues/41839), so we
-        leverage a trick shown in
-        https://github.com/pytorch/pytorch/issues/8741 to refresh the state of
-        optimizers and schedulers (as these subroutines match device state to
-        that of the attached parameters).
-
-        :return: linear classifier
-        :rtype: LinearClassifier object
-        """
-        self.model.cuda()
-        self.cuda_or_cpu()
-        return self
-
-    def cuda_or_cpu(self):
-        """
-        This method applies the trick shown in
-        https://github.com/pytorch/pytorch/issues/8741 to optimizer and
-        scheduler states. Given that this process is device agnostic (in that
-        the states are simply refreshed), it is expected that method be called
-        by either cpu() or cuda().
-
-        :return: None
-        :rtype: NoneType
-        """
-        self.optimizer.load_state_dict(self.optimizer.state_dict())
-        self.scheduler_alg is not None and self.scheduler.load_state_dict(
-            self.scheduler.state_dict()
-        )
-        return None
-
     def fit(self, x, y, valset=0.0):
         """
         This method is the heart of all LinearClassifier-inherited objects. It
@@ -280,7 +238,7 @@ class LinearClassifier:
 
         # compile the model and initialize training prerequisites
         self.classes = y.unique().numel() if self.classes is None else self.classes
-        self.model = self.compile()
+        self.model = self.compile().to(self.device)
         tset, vset = self.initialize(x, y, valset)
         self.summary()
 
@@ -292,10 +250,16 @@ class LinearClassifier:
         max_threads = torch.get_num_threads()
         torch.set_num_threads(self.threads)
         self.model.train()
-        d = torch.cuda.get_device_name() if x.is_cuda else f"{self.threads} cpu threads"
+        d = (
+            torch.cuda.get_device_name()
+            if x.is_cuda
+            else "apple gpu"
+            if x.device.type == "mps"
+            else f"{self.threads} cpu threads"
+        )
         print(
-            f"Performing {'' if self.attack is None else 'adversarial'} training",
-            f"{'' if self.attack is None else f'with {self.attack}'}",
+            f"Performing{'' if self.attack is None else ' adversarial'} training "
+            f"{'' if self.attack is None else f'with {self.attack} '}"
             f"for {self.epochs} epochs on {d}...",
         )
         for e in range(1, self.epochs + 1):
@@ -329,7 +293,7 @@ class LinearClassifier:
         # set model to eval mode, restore thread count, and update state
         self.model.eval()
         torch.set_num_threads(max_threads)
-        self.params["state"] = (
+        self.state = (
             "trained"
             if self.attack is None
             else f"adversarially trained ({self.attack.name})"
@@ -396,7 +360,7 @@ class LinearClassifier:
         self.params["attack"] = "N/A" if self.attack is None else repr(self.attack)
         self.params["classes"] = self.classes
         self.params["features"] = x.size(1)
-        self.params["state"] = "untrained"
+        self.state = "untrained"
         return tset, vset
 
     def max_batch_size(self, lower=1, upper=500000):
@@ -414,56 +378,48 @@ class LinearClassifier:
         :param upper_batch: largest batch size to consider
         :type upper_batch: int
         :return: max batch sizes for traing, inference, and crafting
-        :rtype: tuple of ints
+        :rtype: dict of ints
         """
 
         # initialize stage tracking parameters
-        stage = 0
         stages = "training", "inference", "crafting"
-        grad_req = True, False, True
-        sizes = [1] * len(stages)
-        utils = [0] * len(stages)
-        initial_lower = lower
-        initial_upper = upper
-        steps = torch.tensor(upper).log2().add(1).int().mul(3)
-        features = self.params["features"]
+        sizes = {s: 1 for s in stages}
+        utils = {s: 0 for s in stages}
+        steps = torch.tensor(upper).log2().add(1).int()
+        feat = self.params["features"]
         free_memory, max_memory = torch.cuda.mem_get_info()
 
         # update stage state and track grads appropriately
-        self.model.requires_grad_(True)
-        for i in range(1, steps):
-            if i % (steps // 3) == 0:
-                stage += 1
-                lower = initial_lower
-                upper = initial_upper
-                if stage == 1:
-                    self.model.requires_grad_(False)
-            print(f"Computing {stages[stage]} batch sizes... {i / steps:.2%}", end="\r")
-            try:
+        for stage in stages:
+            self.model.requires_grad_(stage == "training")
+            low = lower
+            up = upper
+            for i in range(steps):
+                print(f"Computing {stage} batch sizes... {i / steps:.2%}", end="\r")
+                try:
+                    # compute utilization (memory peaks before backprop)
+                    size = (low + up) // 2
+                    batch = torch.empty((size, feat), requires_grad=stage == "crafting")
+                    out = self.model(batch)
+                    util = torch.cuda.memory_allocated() / max_memory
+                    stage != "inference" and out.sum().backward()
 
-                # compute utilization (memory peaks before backprop)
-                batch_size = (lower + upper) // 2
-                batch = torch.empty((batch_size, features), requires_grad=stage == 2)
-                out = self.model(batch)
-                util = torch.cuda.memory_allocated() / max_memory
-                grad_req[stage] and out.sum().backward()
+                    # increase batch size and save largest viable batch size
+                    low = max(low, size)
+                    sizes[stage] = max(sizes[stage], size)
+                    utils[stage] = max(utils[stage], util)
 
-                # increase batch size and save largest viable batch size
-                lower = max(lower, batch_size)
-                sizes[stage] = max(sizes[stage], batch_size)
-                utils[stage] = max(utils[stage], util)
+                # gpu was oversubscribed; decrease batch size
+                except RuntimeError:
+                    up = min(up, size)
 
-            # gpu was oversubscribed; decrease batch size
-            except RuntimeError:
-                upper = min(upper, batch_size)
-
-            # release resources
-            out = None
-            batch.grad = None
-            self.model.zero_grad(set_to_none=True)
-            torch.cuda.empty_cache()
-        res = (f"{s} size: {b} ({u:.2%})," for s, b, u in zip(stages, sizes, utils))
-        print("Search complete.", *res)
+                # release resources
+                out = None
+                batch.grad = None
+                self.model.zero_grad(set_to_none=True)
+                torch.cuda.empty_cache()
+        r = (f"{stage} size: {sizes[stage]} ({utils[stage]:.2%})," for stage in stages)
+        print("Search complete.", *r)
         return sizes
 
     def progress(self, e, tacc, tloss, vset):
@@ -574,10 +530,9 @@ class LinearClassifier:
         self.classes = self.model[-1].out_features
         self.params["features"] = features
         self.params["classes"] = self.classes
-        self.params["state"] = "pretrained"
+        self.state = "pretrained"
         self.summary()
         self.model.eval()
-        self.auto_batch and self.max_batch_size()
         return self
 
     def save(self, path, slim=True):
@@ -603,6 +558,29 @@ class LinearClassifier:
         :rtype: NoneType
         """
         print(f"Defined model:\n{self.model}")
+        return None
+
+    def to(self, device):
+        """
+        This method moves the model, optimizer, and scheduler to the cpu, an
+        nvidia gpu, or a macOS gpu. At this time, device conversions are not
+        supported for optimizers nor schedulers
+        (https://github.com/pytorch/pytorch/issues/41839), so we leverage a
+        trick shown in https://github.com/pytorch/pytorch/issues/8741 to
+        refresh the state of optimizers and schedulers (as these subroutines
+        match device state to that of the attached parameters).
+
+        :param device: device to switch to
+        :type device: str
+        :return: None
+        :rtype: NoneType
+        """
+        self.device = self.device
+        self.model.to(self.device)
+        self.optimizer.load_state_dict(self.optimizer.state_dict())
+        self.scheduler_alg is not None and self.scheduler.load_state_dict(
+            self.scheduler.state_dict()
+        )
         return None
 
 
