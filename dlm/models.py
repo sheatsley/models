@@ -236,14 +236,21 @@ class LinearClassifier:
         :rtype: LinearClassifier object
         """
 
-        # compile the model and initialize training prerequisites
+        # configure verbosity, compile the model, and set prerequisites
+        verbose = self.verbosity and self.verbosity != self.epochs
         self.classes = y.unique().numel() if self.classes is None else self.classes
         self.model = self.compile().to(self.device)
-        tset, vset = self.initialize(x, y, valset)
-        self.summary()
+        tsub, vsub = self.initialize(x, y, valset)
+        if verbose:
+            print(f"Training set: ({len(tsub)}, {x.size(1)}) × ({len(tsub)},)")
+            len(vsub) > 0 and print(
+                f"Validation set: ({len(vsub)}, {x.size(1)}) × ({len(vsub)},)"
+            )
+            self.summary()
 
-        # configure verbosity, results dataframe, threads, and training mode
-        verbose = self.verbosity and self.verbosity != self.epochs
+        # configure dataloaders, results dataframe, threads, and training mode
+        tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True)
+        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
         parts, stats = ("training", "validation", "adversarial"), ("accuracy", "loss")
         metrics = ["epoch"] + [f"{p}_{m}" for p in parts for m in stats]
         self.res = pandas.DataFrame(0, index=range(1, self.epochs + 1), columns=metrics)
@@ -261,6 +268,7 @@ class LinearClassifier:
             f"Performing{'' if self.attack is None else ' adversarial'} training "
             f"{'' if self.attack is None else f'with {self.attack} '}"
             f"for {self.epochs} epochs on {d}...",
+            end="\n" if verbose else "\r",
         )
         for e in range(1, self.epochs + 1):
             tloss = tacc = 0
@@ -317,7 +325,7 @@ class LinearClassifier:
         :param valset: hold-out set or proportion of training data use
         :type valset: tuple of torch Tensor objects (n, m) & (n,) or float
         :return: training and validation sets
-        :rtype: tuple of torch.utils.data DataLoader objects
+        :rtype: tuple of torch.utils.data TensorDataset objects
         """
 
         # initialize model and instantiate loss, optimizer, scheduler, & attack
@@ -345,23 +353,16 @@ class LinearClassifier:
             idx = torch.randperm(y.numel())
             tsub = torch.utils.data.Subset(dataset, idx[nval:])
             vsub = torch.utils.data.Subset(dataset, idx[:nval])
-            ntrain = y.numel() - nval
         else:
             tsub = dataset
             vsub = torch.utils.data.TensorDataset(*valset)
-            nval = len(vsub)
-            ntrain = len(tsub)
-        tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True)
-        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
-        print(f"Training set: ({ntrain}, {x.size(1)}) × ({ntrain},)")
-        len(vsub) != 0 and print(f"Validation set: ({nval}, {x.size(1)}) × ({nval},)")
 
         # update metadata and model state
         self.params["attack"] = "N/A" if self.attack is None else repr(self.attack)
         self.params["classes"] = self.classes
         self.params["features"] = x.size(1)
         self.state = "untrained"
-        return tset, vset
+        return tsub, vsub
 
     def max_batch_size(self, lower=1, upper=500000):
         """
