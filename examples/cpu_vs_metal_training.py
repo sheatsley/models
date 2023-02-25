@@ -17,6 +17,7 @@ import argparse  # Parser for command-line options, arguments and sub-commands
 import matplotlib.pyplot as plt  # Python plotting package
 import mlds  # Scripts for downloading, preprocessing, and numpy-ifying popular machine learning datasets
 import pandas  # Powerful data structures for data analysis, time series, and statistics
+import platform  # Access to underlying platform's identifying data
 import seaborn  # statistical data visualization
 import time  # Time access and conversions
 
@@ -59,8 +60,8 @@ def plot(results):
     This function plots the performance measurement results. Specifically, this
     produces a stacked horizontal bar chart of the measured wall-clock times
     (in seconds) with three bar clusters (corresponding to training, inference,
-    and crafting), wherein each cluster contains a datasets-number of bars.
-    Moreover, the resultant plot is saved to disk in the current directory.
+    and crafting), wherein each cluster contains a datasets-number of bars. The
+    plot is written to disk in the current directory.
 
     :param results: results of the performance measurements
     :type results: pandas Dataframe object
@@ -68,7 +69,7 @@ def plot(results):
     :rtype: NoneType
     """
     title = (
-        f"torch v{torch.__version__}, aml {aml.__version__}, "
+        f"{platform.platform()}, torch v{torch.__version__}, aml {aml.__version__}, "
         f"dlm {dlm.__version__}, {time.strftime('%m/%d/%y', time.localtime())}"
     )
     results = results.sort_values("training", ascending=False)
@@ -104,13 +105,16 @@ def plot(results):
         labels=labels[: len(stages)],
         title="cpu",
     )
-    ax.get_figure().savefig("cpu_vs_metal_training", bbox_inches="tight")
+    ax.get_figure().savefig(
+        "/".join(__file__.split("/")[:-1]) + "/cpu_vs_metal_training",
+        bbox_inches="tight",
+    )
     return None
 
 
 def main(attack, datasets):
     """
-    This function is the main entrypoint for macOS cpu vs gpu comparison.
+    This function is the main entry point for macOS cpu vs gpu comparison.
     Specifically, this: (1) loads the dataset(s), (2) instantiates the attack
     object, (3) benchmarks performance, and (4) plots the results.
 
@@ -150,12 +154,12 @@ def main(attack, datasets):
         # instantiate an mlp or cnn and migrate tensors to the device
         for j, d in enumerate(("cpu", "mps")):
             print(f"Instantiating {architecture.__name__} model on {d}...")
-            model = architecture(**hyperparameters | dict(device=d, verbosity=1))
+            model = architecture(**hyperparameters | dict(device=d, verbosity=0))
             x, y = x.to(d), y.to(d)
 
             # instantiate the attack and perform the benchmarks
             print(f"Instantiating {attack.__name__} on {d} and running benchmarks...")
-            attack_parameters = dict(alpha=0.01, epochs=15, model=model, verbosity=1)
+            attack_parameters = dict(alpha=0.01, epochs=15, model=model, verbosity=0)
             budget = 0.15
             l0 = int(x.size(1) * budget) + 1
             l2 = maxs.sub(mins).norm(2).mul(budget).item()
