@@ -295,7 +295,7 @@ class LinearClassifier:
                 f"Epoch {e:{len(str(self.epochs))}} / {self.epochs} {prog}"
             ) if verbose and not e % self.verbosity else print(
                 f"Epoch {e}... ({e / self.epochs:.1%})",
-                end="\r",
+                end="\x1b[K\r",
             )
 
         # set model to eval mode, restore thread count, and update state
