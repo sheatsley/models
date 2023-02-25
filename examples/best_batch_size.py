@@ -29,9 +29,17 @@ def plot(results):
     :return: None
     :rtype: NoneType
     """
-    plot = seaborn.FacetGrid(col="dataset", data=results)
-    plot.map_dataframe(seaborn.lineplot, "epoch", "loss", "data", style="batch size")
-    plot.add_legend()
+    plot = seaborn.relplot(
+        data=results,
+        col="dataset",
+        col_wrap=(results.dataset.unique().size + 1) // 2,
+        kind="line",
+        hue="batch size",
+        palette="flare",
+        style="data",
+        x="epoch",
+        y="loss",
+    )
     plot.savefig(
         "/".join(__file__.split("/")[:-1]) + "/best_batch_size",
         bbox_inches="tight",
@@ -86,7 +94,7 @@ def main(batch_sizes, datasets, device):
             print(
                 f"Setting batch size to {b}... {j} of {len(batch_sizes)} "
                 f"({i / len(batch_sizes):.2%})",
-                end="\x1b[1K\r",
+                end="\r",
             )
             model = architecture(
                 **hyperparameters | dict(batch_size=b, device=device, verbosity=0)
@@ -95,6 +103,8 @@ def main(batch_sizes, datasets, device):
             model.fit(x, y, valset=(xv, yv) if has_test else 0.2)
 
             # prepare the results and extend the dataframe
+            model.res.training_loss /= model.res.training_loss.max()
+            model.res.validation_loss /= model.res.validation_loss.max()
             result = model.res.melt(
                 id_vars=["epoch"],
                 value_name="loss",
