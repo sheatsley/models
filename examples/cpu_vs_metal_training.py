@@ -58,10 +58,11 @@ def benchmark(attack, model, x, y):
 def plot(results):
     """
     This function plots the performance measurement results. Specifically, this
-    produces a stacked horizontal bar chart of the measured wall-clock times
-    (in seconds) with three bar clusters (corresponding to training, inference,
-    and crafting), wherein each cluster contains a datasets-number of bars. The
-    plot is written to disk in the current directory.
+    produces a series of a clustered, stacked, horizontal bar charts of the
+    measured wall-clock times (in seconds) corresponding to training,
+    inference, and crafting times. A dataset-number of clusters are produced,
+    with each cluster containing two bars (i.e., cpu and gpu times). The plot
+    is written to disk in the current directory.
 
     :param results: results of the performance measurements
     :type results: pandas Dataframe object
@@ -106,7 +107,7 @@ def plot(results):
         title="cpu",
     )
     ax.get_figure().savefig(
-        "/".join(__file__.split("/")[:-1]) + "/cpu_vs_metal_training",
+        "/".join(__file__.split("/")[:-1]) + "/cpu_vs_metal_training.pdf",
         bbox_inches="tight",
     )
     return None
