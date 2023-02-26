@@ -91,11 +91,7 @@ def main(batch_sizes, datasets, device):
 
         # instantiate models, iterate over batch sizes, and perform training
         for j, b in enumerate(batch_sizes):
-            print(
-                f"Setting batch size to {b}... {j} of {len(batch_sizes)} "
-                f"({i / len(batch_sizes):.2%})",
-                end="\r",
-            )
+            print(f"On {dataset} batch size {b}... {j} of {len(batch_sizes)} ")
             model = architecture(
                 **hyperparameters | dict(batch_size=b, device=device, verbosity=0)
             )
