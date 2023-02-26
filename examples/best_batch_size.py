@@ -10,7 +10,6 @@ import pandas  # Powerful data structures for data analysis, time series, and st
 import seaborn  # statistical data visualization
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 import warnings  # Warning control
-import matplotlib.pyplot as plt
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -33,21 +32,23 @@ def plot(results):
         data=results,
         col="dataset",
         col_wrap=(results.dataset.unique().size + 1) // 2,
-        kind="line",
+        facet_kws=dict(sharex=False),
         hue="batch size",
+        kind="line",
+        legend="full" if results.dataset.unique().size > 1 else "auto",
         palette="flare",
         style="data",
         x="epoch",
         y="loss",
     )
     plot.savefig(
-        "/".join(__file__.split("/")[:-1]) + "/best_batch_size",
+        "/".join(__file__.split("/")[:-1]) + "/best_batch_size.pdf",
         bbox_inches="tight",
     )
     return None
 
 
-def main(batch_sizes, datasets, device):
+def main(batch_sizes, datasets, device, equalize):
     """
     This function is the main entry point for the batch size benchmark.
     Specifically, this: (1) loads the dataset(s), (2) iterates over batch
@@ -59,12 +60,15 @@ def main(batch_sizes, datasets, device):
     :type dataset: str
     :param device: hardware device to train models on
     :type device: str
+    :param equalize: ensures all models have the same number of backprops
+    :param equalize: bool
     :return: None
     :rtype: NoneType
     """
     results = pandas.DataFrame(
         columns=("batch size", "dataset", "data", "epoch", "loss"),
     )
+    print(f"Batch sizes to benchmark: {batch_sizes}")
     for i, dataset in enumerate(datasets):
 
         # load dataset and convert to pytorch tensors
@@ -81,38 +85,43 @@ def main(batch_sizes, datasets, device):
             x = torch.from_numpy(data.dataset.data)
             y = torch.from_numpy(data.dataset.labels).long()
 
-        # fetch model template
+        # fetch model template and equalize backprops if necessary
         template = getattr(dlm.templates, dataset)
         architecture, hyperparameters = (
             (dlm.CNNClassifier, template.cnn)
             if hasattr(template, "cnn")
             else (dlm.MLPClassifier, template.mlp)
         )
+        backprops = hyperparameters["epochs"] / batch_sizes[0]
 
         # instantiate models, iterate over batch sizes, and perform training
         for j, b in enumerate(batch_sizes):
-            print(f"On {dataset} batch size {b}... {j} of {len(batch_sizes)} ")
+            print(f"On {dataset} batch size {b}... {j + 1} of {len(batch_sizes)} ")
+            epochs = int(backprops * b) if equalize else hyperparameters["epochs"]
             model = architecture(
-                **hyperparameters | dict(batch_size=b, device=device, verbosity=0)
+                **hyperparameters
+                | dict(batch_size=b, device=device, epochs=epochs, verbosity=0)
             )
             x, y = x.to(device), y.to(device)
             model.fit(x, y, valset=(xv, yv) if has_test else 0.2)
 
             # prepare the results and extend the dataframe
-            model.res.training_loss /= model.res.training_loss.max()
-            model.res.validation_loss /= model.res.validation_loss.max()
             result = model.res.melt(
                 id_vars=["epoch"],
                 value_name="loss",
                 value_vars=["training_loss", "validation_loss"],
                 var_name="data",
             ).replace("_loss", "", regex=True)
-            result.epoch /= result.epoch.max()
             result["batch size"] = b
             result["dataset"] = dataset
             results = pandas.concat((results, result))
 
-    # plot and save the results
+        # normalize loss results
+        for data in ("validation", "training"):
+            mask = (results.dataset == dataset) & (results.data == data)
+            results.loc[mask, "loss"] /= results.loc[mask, "loss"].max()
+
+    # normalize results, plot them, and write to disk
     plot(results)
     return None
 
@@ -123,16 +132,16 @@ if __name__ == "__main__":
     Specifically, this script: (1) trains models over a set of batch sizes, and
     (2) measures and plots model loss on training and validation data over the
     (normalized) number of epochs. Datasets are provided by mlds
-    (https://github.com/sheatsley/datasets),
+    (https://github.com/sheatsley/datasets).
     """
     parser = argparse.ArgumentParser(description="batch size performance benchmarks")
     parser.add_argument(
         "-b",
         "--bsizes",
-        default=(min(2**i, 256 * max(1, i - 7)) for i in range(5, 15)),
+        default=(min(2**i, 256 * max(1, i - 7)) for i in range(4, 15)),
         help="Batch sizes to benchmark over",
         nargs="+",
-        type=lambda b: map(int, b),
+        type=lambda b: sorted(map(int, b)),
     )
     parser.add_argument(
         "-d",
@@ -155,5 +164,10 @@ if __name__ == "__main__":
         help="Equalize the total number of backprops (experimental)",
     )
     args = parser.parse_args()
-    main(batch_sizes=tuple(args.bsizes), datasets=args.datasets, device=args.device)
+    main(
+        batch_sizes=tuple(args.bsizes),
+        datasets=args.datasets,
+        device=args.device,
+        equalize=args.equalize,
+    )
     raise SystemExit(0)
