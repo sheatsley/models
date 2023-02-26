@@ -12,15 +12,12 @@ import pandas  # Python Data Analysis Library
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
 
 # TODO
-# add an examples directory showing plotting, etc.
 # update all hyperparameters
 # add trades loss
 # add mart loss
 # add gtsrb hparams
 # add cifar10 hparams
-# create thread benchmarks
-# confirm models can be saved and loaded to from gpu cpu appropriately
-# consider basic hyperparameter optimization class
+# add readme
 
 
 class LinearClassifier:
@@ -505,7 +502,7 @@ class LinearClassifier:
         """
 
         # load model or state dict (and forcibly compile if necessary)
-        model = torch.load(path)
+        model = torch.load(path, map_location=self.device)
         if type(model) == torch.nn.Sequential:
             self.model = model
         else:
@@ -521,6 +518,7 @@ class LinearClassifier:
                 self.model = self.compile()
                 self(torch.empty((1, features)), grad_enabled=False)
                 self.model.load_state_dict(model)
+                self.model.to(self.device)
 
         # infer features, update parameters, and set model to inference
         features = (
@@ -578,10 +576,13 @@ class LinearClassifier:
         """
         self.device = self.device
         self.model.to(self.device)
-        self.optimizer.load_state_dict(self.optimizer.state_dict())
-        self.scheduler_alg is not None and self.scheduler.load_state_dict(
-            self.scheduler.state_dict()
-        )
+
+        # models in pretrained state may not have an optimizer nor scheduler
+        if self.state != "pretrained":
+            self.optimizer.load_state_dict(self.optimizer.state_dict())
+            self.scheduler_alg is not None and self.scheduler.load_state_dict(
+                self.scheduler.state_dict()
+            )
         return None
 
 
