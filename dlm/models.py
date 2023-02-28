@@ -7,9 +7,11 @@ support rapid prototyping of standard deep learning models.
 Author: Ryan Sheatsley & Blaine Hoak
 Thu Feb 2 2023
 """
-import itertools  # Functions creating iterators for efficient looping
-import pandas  # Python Data Analysis Library
-import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
+
+import itertools
+
+import pandas
+import torch
 
 # TODO
 # update all hyperparameters
