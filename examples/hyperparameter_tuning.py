@@ -3,14 +3,16 @@ This script performs basic hyperparameter tuning.
 Author: Ryan Sheatsley
 Sun Feb 24 2023
 """
-import dlm  # PyTorch-based deep learning models with Keras-like interfaces
-import argparse  # Parser for command-line options, arguments and sub-commands
-import itertools  # Functions creating iterators for efficient looping
-import mlds  # Scripts for downloading, preprocessing, and numpy-ifying popular machine learning datasets
-import pandas  # Powerful data structures for data analysis, time series, and statistics
-import plotly.express as px  # An open-source, interactive data visualization library for Python
-import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
-import warnings  # Warning control
+
+import argparse
+import itertools
+import warnings
+
+import dlm
+import mlds
+import pandas
+import plotly.express as px
+import torch
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -30,7 +32,6 @@ def plot(dataset, results):
     :return: None
     :rtype: NoneType
     """
-    results = results.sort_values("validation_loss", ascending=False)
     fig = px.parallel_categories(
         data_frame=results,
         color="validation_loss",
