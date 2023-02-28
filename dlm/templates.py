@@ -5,7 +5,8 @@ a form of bookkeeping to be passed as arguments to model instantiations.
 Author: Ryan Sheatsley and Blaine Hoak
 Thu Feb 2 2023
 """
-import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
+
+import torch
 
 
 class cicmalmem2022:

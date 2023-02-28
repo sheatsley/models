@@ -7,12 +7,13 @@ Authors: Ryan Sheatsley and Blaine Hoak
 Thu Feb 16 2023
 """
 
-import aml  # ML robustness evaluations with PyTorch
-import dlm  # PyTorch-based deep learning models with Keras-like interfaces
-import itertools  # Functions creating iterators for efficient looping
-import mlds  # Scripts for downloading, preprocessing, and numpy-ifying popular machine learning datasets
-import unittest  # Unit testing framework
-import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
+import itertools
+import unittest
+
+import aml
+import torch
+
+import dlm
 
 
 class FunctionalTests(unittest.TestCase):
