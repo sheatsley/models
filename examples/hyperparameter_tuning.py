@@ -34,12 +34,13 @@ def plot(dataset, results):
     """
     fig = px.parallel_categories(
         data_frame=results,
-        color="validation_loss",
+        color="validation_accuracy",
         color_continuous_scale=px.colors.diverging.BrBG,
+        range_color=(0, 1),
         title=f"{dataset}",
     )
     fig.write_image(
-        "/".join(__file__.split("/")[:-1]) + f"/{dataset}_hyperparameter_tuning.pdf",
+        "/".join(__file__.split("/")[:-1]) + f"/hyperparameter_tuning_{dataset}.pdf",
     )
     return None
 
@@ -103,7 +104,7 @@ def main(batch_sizes, dataset, device, epochs, hidden_layers, learning_rates):
         "epoch",
         "hidden_layers",
         "learning_rate",
-        "validation_loss",
+        "validation_accuracy",
     )
     results = pandas.DataFrame(0, index=range(len(space)), columns=metrics)
     print(f"Total parameter space to consider: {len(space)}")
@@ -123,11 +124,12 @@ def main(batch_sizes, dataset, device, epochs, hidden_layers, learning_rates):
         )
         x, y = x.to(device), y.to(device)
         model.fit(x, y, valset=(xv, yv) if has_test else 0.2)
-        results.loc[i] = (b, e, str(h), l, model.res.validation_loss.iloc[-1])
+        results.loc[i] = (b, e, str(h), l, model.res.validation_accuracy.iloc[-1])
         print(
-            f"Completed bsize={b:{ba}}, epochs={e:{ea}}, hlayers={str(h):>{ha}}, "
-            f"lrate={l:{la}}, T Loss: {model.res.training_loss.iloc[-1]:5.2f}",
-            f"V Loss: {model.res.validation_loss.iloc[-1]:5.2f} ({i/len(space):6.2%})",
+            f"Completed bsize={b:{ba}}, epochs={e:{ea}}, hlayers={str(h):>{ha}},",
+            f"lrate={l:{la}}, T Acc: {model.res.training_accuracy.iloc[-1]:6.2%}",
+            f"V Acc: {model.res.validation_accuracy.iloc[-1]:6.2%}",
+            f"Hparam {i} of {len(space)} ({i/len(space):6.2%})",
         )
 
     # plot and save the results
@@ -140,7 +142,7 @@ if __name__ == "__main__":
     This script performs basic hyperparameter tuning (i.e., a grid search).
     Specifically, this script: (1) combinatorically iterates over the provided
     parameters, (2) trains models over current parameter set (concurrently, if
-    possible), (3) measures the validation loss, and (4) produces a parallel
+    possible), (3) measures validation accuracy, and (4) produces a parallel
     coordinates plot. Datasets are provided by mlds
     (https://github.com/sheatsley/datasets).
     """
