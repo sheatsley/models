@@ -5,21 +5,21 @@ Author: Ryan Sheatsley
 Thu Feb 23 2023
 """
 
+import argparse
+import os
+import platform
+import time
+
+import aml
+import dlm
+import matplotlib.pyplot as plt
+import mlds
+import pandas
+import seaborn
+import torch
+
 # necessary until https://github.com/pytorch/pytorch/issues/77764 is resolved
-import os  # Miscellaneous operating system interfaces
-
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
-
-import aml  # Deep learning robustness evaluations with PyTorch
-import dlm  # PyTorch-based deep learning models with Keras-like interfaces
-import argparse  # Parser for command-line options, arguments and sub-commands
-import matplotlib.pyplot as plt  # Python plotting package
-import mlds  # Scripts for downloading, preprocessing, and numpy-ifying popular machine learning datasets
-import pandas  # Powerful data structures for data analysis, time series, and statistics
-import platform  # Access to underlying platform's identifying data
-import seaborn  # statistical data visualization
-import time  # Time access and conversions
 
 
 def benchmark(attack, model, x, y):
@@ -182,8 +182,7 @@ if __name__ == "__main__":
     """
     This script benchmarks the performance of training, inference, and crafting
     adversarial examples on macOS cpus vs gpus (i.e., Metal). Datasets are
-    provided by mlds (https://github.com/sheatsley/datasets), models by dlm
-    (https://github.com/sheatsley/models), and attacks by
+    provided by mlds (https://github.com/sheatsley/datasets) and attacks by
     (https://github.com/sheatsley/attacks). Specifically, this script: (1)
     parses command-line arguments, (2) loads dataset(s), (3) collects runtime
     statistics on model training, test set inference, and crafting adversarial
