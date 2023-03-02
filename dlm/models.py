@@ -20,6 +20,7 @@ import torch
 # add gtsrb hparams
 # add cifar10 hparams
 # add readme
+# adjust dropout in convolutions  (perhaps remove entirely)
 
 
 class LinearClassifier:
@@ -165,7 +166,7 @@ class LinearClassifier:
         )
         split = x.size(0) if x.device.type != "cuda" else self.max_batch[stage]
         with torch.set_grad_enabled(grad_enabled):
-            return torch.cat([self.model(xb) for xb in x.split(split)])
+            return torch.cat([self.model(xb.flatten(1)) for xb in x.split(split)])
 
     def __getattr__(self, name):
         """
@@ -191,19 +192,23 @@ class LinearClassifier:
         p = ", ".join(f"{p}={v}" for p, v in self.params.items())
         return f"{type(self).__name__}({p}, state={self.state}, device={self.device})"
 
-    def accuracy(self, x, y):
+    def accuracy(self, x, y, as_tensor=False):
         """
         This method returns the fraction of inputs classified correctly over
-        the total number of samples.
+        the total number of samples (unless as_tensor is True, which returns a
+        boolean tensor instead).
 
         :param x: batch of inputs
         :type x: torch Tensor object (n, m)
         :param y: batch of labels
         :type y: Pytorch Tensor object (n,)
+        :param as_tensor: whether to return a boolean, instead of a float, tensor
+        :type as_tensor: bool
         :return: model accuracy
         :rtype: torch Tensor object (1,)
         """
-        return self(x, grad_enabled=False).argmax(1).eq_(y).mean(dtype=torch.float)
+        t = self(x, grad_enabled=False).argmax(1).eq_(y)
+        return t.to(dtype=torch.bool) if as_tensor else t.mean(dtype=torch.float)
 
     def compile(self):
         """
@@ -289,7 +294,7 @@ class LinearClassifier:
             self.scheduler is not None and self.scheduler.step()
 
             # compute training statistics every epoch and update results
-            prog = self.progress(e, tacc.div(y.numel()).item(), tloss.item(), vset)
+            prog = self.progress(e, tacc.div(len(tsub)).item(), tloss.item(), vset)
             print(
                 f"Epoch {e:{len(str(self.epochs))}} / {self.epochs} {prog}"
             ) if verbose and not e % self.verbosity else print(
@@ -756,7 +761,6 @@ class CNNClassifier(MLPClassifier):
 
         # assemble convolutional layers
         convolutional = (
-            [torch.nn.Dropout(self.dropout)],
             map(lambda c: torch.nn.LazyConv2d(c, self.kernel_size), self.conv_layers),
             [self.activation()],
             [torch.nn.MaxPool2d(self.kernel_size)],
