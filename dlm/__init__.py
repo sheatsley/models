@@ -6,20 +6,10 @@ Tue Nov 29 2022
 
 import subprocess
 
+import dlm.templates as templates
 from dlm.models import CNNClassifier, LinearClassifier, MLPClassifier
-from dlm.templates import cicmalmem2022, fmnist, mnist, nslkdd, phishing, unswnb15
 
-__all__ = [
-    "CNNClassifier",
-    "LinearClassifier",
-    "MLPClassifier",
-    "cicmalmem2022",
-    "fmnist",
-    "mnist",
-    "nslkdd",
-    "phishing",
-    "unswnb15",
-]
+__all__ = ["CNNClassifier", "LinearClassifier", "MLPClassifier", "templates"]
 
 # compute version
 __version__ = subprocess.check_output(
