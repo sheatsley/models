@@ -156,7 +156,6 @@ class FunctionalTests(unittest.TestCase):
                     model
                 ) is dlm.MLPClassifier else self.verify_cnn(
                     self.classes,
-                    self.features,
                     model.model,
                     template["activation"],
                     template["conv_layers"],
@@ -206,7 +205,6 @@ class FunctionalTests(unittest.TestCase):
     def verify_cnn(
         self,
         classes,
-        features,
         model,
         activation,
         conv_layers,
@@ -228,8 +226,6 @@ class FunctionalTests(unittest.TestCase):
 
         :param classes: number of classes
         :type classes: int
-        :param features: number of features
-        :type features: int
         :param model: model to verify
         :type model: torch.nn Sequential object
         :param activation: activation function used
