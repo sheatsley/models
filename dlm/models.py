@@ -7,7 +7,6 @@ support rapid prototyping of standard deep learning models.
 Author: Ryan Sheatsley & Blaine Hoak
 Thu Feb 2 2023
 """
-
 import itertools
 
 import pandas
@@ -20,7 +19,6 @@ import torch
 # add gtsrb hparams
 # add cifar10 hparams
 # add readme
-# adjust dropout in convolutions  (perhaps remove entirely)
 
 
 class LinearClassifier:
@@ -392,7 +390,7 @@ class LinearClassifier:
         utils = {s: 0 for s in stages}
         steps = torch.tensor(upper).log2().add(1).int()
         feat = self.params["features"]
-        free_memory, max_memory = torch.cuda.mem_get_info()
+        _, max_memory = torch.cuda.mem_get_info()
 
         # update stage state and track grads appropriately
         for stage in stages:
@@ -581,7 +579,7 @@ class LinearClassifier:
         :return: None
         :rtype: NoneType
         """
-        self.device = self.device
+        self.device = device
         self.model.to(self.device)
 
         # models in pretrained state may not have an optimizer nor scheduler
