@@ -9,5 +9,5 @@ and plots model accuracy over batch size on training and validation data.
 models, performing inference, and crafting adversarial examples. (Requires
 [mlds](https://github.com/sheatsley/datasets) and
 [aml](https://github.com/sheatsley/attacks))
-* `hyperparameter_tune.py`: performs (crude) hyperparameter tuning and
+* `hyperparameter_tuning.py`: performs (crude) hyperparameter tuning and
 produces a parallel coordinates plot, colored by the validation loss.
