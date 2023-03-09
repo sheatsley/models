@@ -4,19 +4,19 @@ adversarial examples on macOS cpus vs gpus (i.e., Metal).
 Author: Ryan Sheatsley
 Thu Feb 23 2023
 """
-
 import argparse
 import os
 import platform
 import time
 
 import aml
-import dlm
 import matplotlib.pyplot as plt
 import mlds
 import pandas
 import seaborn
 import torch
+
+import dlm
 
 # necessary until https://github.com/pytorch/pytorch/issues/77764 is resolved
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -76,8 +76,8 @@ def plot(results):
     results = results.sort_values("training", ascending=False)
     stages = "training", "crafting", "inference"
     seaborn.set_theme(style="whitegrid")
-    fig, ax = plt.subplots()
-    for i, (stage, palette) in enumerate(zip(stages, ("pastel", "muted", "dark"))):
+    _, ax = plt.subplots()
+    for stage, palette in zip(stages, ("pastel", "muted", "dark")):
         seaborn.barplot(
             data=results,
             hue="device",
@@ -89,7 +89,7 @@ def plot(results):
     ax.set(title=title, xlabel="seconds", xscale="log", ylabel="")
     elements = zip(*ax.get_legend_handles_labels())
     handles, labels = zip(
-        *((h, s) for (h, l), s in zip(sorted(elements, key=lambda x: x[1]), stages * 2))
+        *((h, s) for (h, _), s in zip(sorted(elements, key=lambda x: x[1]), stages * 2))
     )
     mps_legend = ax.legend(
         bbox_to_anchor=(1, 1),
