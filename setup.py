@@ -3,7 +3,6 @@ Build script for Deep Learning Models
 Author: Ryan Sheatsley & Blaine Hoak
 Thu Feb 2 2023
 """
-
 import setuptools
 
 with open("README.md", "r") as f:

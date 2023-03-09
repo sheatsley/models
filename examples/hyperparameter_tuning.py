@@ -3,16 +3,16 @@ This script performs basic hyperparameter tuning.
 Author: Ryan Sheatsley
 Sun Feb 24 2023
 """
-
 import argparse
 import itertools
 import warnings
 
-import dlm
 import mlds
 import pandas
 import plotly.express as px
 import torch
+
+import dlm
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)

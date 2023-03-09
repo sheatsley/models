@@ -5,7 +5,6 @@ a form of bookkeeping to be passed as arguments to model instantiations.
 Author: Ryan Sheatsley and Blaine Hoak
 Thu Feb 2 2023
 """
-
 import torch
 
 

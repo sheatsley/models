@@ -3,13 +3,15 @@ This script measures model performance as a function of batch size.
 Author: Ryan Sheatsley
 Fri Feb 24 2023
 """
-import dlm  # PyTorch-based deep learning models with Keras-like interfaces
 import argparse  # Parser for command-line options, arguments and sub-commands
+import warnings  # Warning control
+
 import mlds  # Scripts for downloading, preprocessing, and numpy-ifying popular machine learning datasets
 import pandas  # Powerful data structures for data analysis, time series, and statistics
 import seaborn  # statistical data visualization
 import torch  # Tensors and Dynamic neural networks in Python with strong GPU acceleration
-import warnings  # Warning control
+
+import dlm  # PyTorch-based deep learning models with Keras-like interfaces
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)
