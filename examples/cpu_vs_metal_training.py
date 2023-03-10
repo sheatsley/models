@@ -10,13 +10,12 @@ import platform
 import time
 
 import aml
+import dlm
 import matplotlib.pyplot as plt
 import mlds
 import pandas
 import seaborn
 import torch
-
-import dlm
 
 # necessary until https://github.com/pytorch/pytorch/issues/77764 is resolved
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -106,10 +105,7 @@ def plot(results):
         labels=labels[: len(stages)],
         title="cpu",
     )
-    ax.get_figure().savefig(
-        "/".join(__file__.split("/")[:-1]) + "/cpu_vs_metal_training.pdf",
-        bbox_inches="tight",
-    )
+    ax.get_figure().savefig(__file__[:-2] + ".pdf", bbox_inches="tight")
     return None
 
 

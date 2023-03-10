@@ -6,12 +6,11 @@ Fri Feb 24 2023
 import argparse
 import warnings
 
+import dlm
 import mlds
 import pandas
 import seaborn
 import torch
-
-import dlm
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -43,10 +42,7 @@ def plot(results):
         x="epoch",
         y="loss",
     )
-    plot.savefig(
-        "/".join(__file__.split("/")[:-1]) + "/best_batch_size.pdf",
-        bbox_inches="tight",
-    )
+    plot.savefig(__file__[:-2] + ".pdf", bbox_inches="tight")
     return None
 
 

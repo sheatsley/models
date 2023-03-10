@@ -7,12 +7,11 @@ import argparse
 import itertools
 import warnings
 
+import dlm
 import mlds
 import pandas
 import plotly.express as px
 import torch
-
-import dlm
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -39,9 +38,7 @@ def plot(dataset, results):
         range_color=(0, 1),
         title=f"{dataset}",
     )
-    fig.write_image(
-        "/".join(__file__.split("/")[:-1]) + f"/hyperparameter_tuning_{dataset}.pdf",
-    )
+    fig.write_image(__file__[:-2] + f"_{dataset}.pdf")
     return None
 
 
