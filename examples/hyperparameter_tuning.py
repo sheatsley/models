@@ -38,7 +38,7 @@ def plot(dataset, results):
         range_color=(0, 1),
         title=f"{dataset}",
     )
-    fig.write_image(__file__[:-2] + f"_{dataset}.pdf")
+    fig.write_image(__file__[:-3] + f"_{dataset}.pdf")
     return None
 
 
