@@ -42,7 +42,7 @@ def plot(results):
         x="epoch",
         y="loss",
     )
-    plot.savefig(__file__[:-2] + ".pdf", bbox_inches="tight")
+    plot.savefig(__file__[:-2] + ".pdf")
     return None
 
 
