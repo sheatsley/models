@@ -105,7 +105,7 @@ def plot(results):
         labels=labels[: len(stages)],
         title="cpu",
     )
-    ax.get_figure().savefig(__file__[:-2] + ".pdf", bbox_inches="tight")
+    ax.get_figure().savefig(__file__[:-3] + ".pdf", bbox_inches="tight")
     return None
 
 
@@ -184,6 +184,7 @@ if __name__ == "__main__":
     statistics on model training, test set inference, and crafting adversarial
     examples on the both the cpu and gpu, and (4) plots the results.
     """
+    breakpoint()
     parser = argparse.ArgumentParser(
         description="macOS cpu vs gpu performance comparison"
     )

@@ -42,7 +42,7 @@ def plot(results):
         x="epoch",
         y="loss",
     )
-    plot.savefig(__file__[:-2] + ".pdf")
+    plot.savefig(__file__[:-3] + ".pdf")
     return None
 
 
