@@ -18,7 +18,6 @@ import torch
 # add mart loss
 # add gtsrb hparams
 # add cifar10 hparams
-# add readme
 
 
 class LinearClassifier:
@@ -41,7 +40,7 @@ class LinearClassifier:
     :func:`progress`: records various statistics on training progress
     :func:`save`: save models parameters (or entire model state)
     :func:`summary`: prints model architecture
-    :func:`to`: synchronize the device for models, optimizers, and schedulers
+    :func:`to`: move the model, optimizer, and scheduler to a device
     """
 
     def __init__(
@@ -87,7 +86,7 @@ class LinearClassifier:
         :param learning_rate: learning rate
         :type learning_rate: float
         :param loss: loss function
-        :type loss: loss module class
+        :type loss: torch.nn class
         :param optimizer: optimizer from optimizers package
         :type optimizer: torch.optim class
         :param optimizer_params: optimizer parameters
@@ -603,9 +602,6 @@ class MLPClassifier(LinearClassifier):
     :func:`__getattr__`: return torch.nn Sequential object attributes
     :func:`__repr__`: returns parameters, optimizer, scheduler, and state
     :func:`accuracy`: returns model accuracy
-    :func:`cpu`: moves all tensors to cpu
-    :func:`cuda`: moves all tensors to gpu
-    :func:`cuda_or_cpu`: matches optimizer and scheduler states to model device
     :func:`fit`: performs model training
     :func:`init`: initializes training preqrequisites
     :func:`load`: load saved models
@@ -613,6 +609,7 @@ class MLPClassifier(LinearClassifier):
     :func:`progress`: records various statistics on training progress
     :func:`save`: save models parameters (or entire model state)
     :func:`summary`: prints model architecture
+    :func:`to`: move the model, optimizer, and scheduler to a device
 
     And redefines the following methods:
 
@@ -690,9 +687,6 @@ class CNNClassifier(MLPClassifier):
     :func:`__getattr__`: return torch.nn Sequential object attributes
     :func:`__repr__`: returns parameters, optimizer, scheduler, and state
     :func:`accuracy`: returns model accuracy
-    :func:`cpu`: moves all tensors to cpu
-    :func:`cuda`: moves all tensors to gpu
-    :func:`cuda_or_cpu`: matches optimizer and scheduler states to model device
     :func:`fit`: performs model training
     :func:`init`: initializes training preqrequisites
     :func:`load`: load saved models
@@ -700,6 +694,7 @@ class CNNClassifier(MLPClassifier):
     :func:`progress`: records various statistics on training progress
     :func:`save`: save models parameters (or entire model state)
     :func:`summary`: prints model architecture
+    :func:`to`: move the model, optimizer, and scheduler to a device
 
     And redefines the following methods:
 
