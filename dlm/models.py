@@ -18,6 +18,7 @@ import torch
 # add mart loss
 # add gtsrb hparams
 # add cifar10 hparams
+# __call__ ONLY works when auto_batch (else max_batch is undefined)
 
 
 class LinearClassifier:
@@ -121,7 +122,10 @@ class LinearClassifier:
             else min(threads, torch.get_num_threads())
         )
         self.verbosity = max(int(epochs * verbosity), 1 if verbosity else 0)
-        self.max_batch = None
+        self.max_batch = dict.fromkeys(
+            ("training", "inference", "crafting"),
+            torch.iinfo(torch.int).max,
+        )
         self.state = "skeleton"
         self.params = {
             "attack": "N/A" if self.attack_alg is None else self.attack_alg.__name__,
@@ -346,6 +350,12 @@ class LinearClassifier:
             else self.attack_alg(**self.attack_params | {"model": self})
         )
 
+        # update metadata and model state
+        self.params["attack"] = "N/A" if self.attack is None else repr(self.attack)
+        self.params["classes"] = self.classes
+        self.params["features"] = x.size(1)
+        self.state = "untrained"
+
         # find max batch size, build validation set, and prepare data loader
         self.max_batch = self.max_batch_size() if self.auto_batch else self.max_batch
         dataset = torch.utils.data.TensorDataset(x, y)
@@ -357,12 +367,6 @@ class LinearClassifier:
         else:
             tsub = dataset
             vsub = torch.utils.data.TensorDataset(*valset)
-
-        # update metadata and model state
-        self.params["attack"] = "N/A" if self.attack is None else repr(self.attack)
-        self.params["classes"] = self.classes
-        self.params["features"] = x.size(1)
-        self.state = "untrained"
         return tsub, vsub
 
     def max_batch_size(self, lower=1, upper=500000):
@@ -384,7 +388,7 @@ class LinearClassifier:
         """
 
         # initialize stage tracking parameters
-        stages = "training", "inference", "crafting"
+        stages = self.max_batch.keys()
         sizes = {s: 1 for s in stages}
         utils = {s: 0 for s in stages}
         steps = torch.tensor(upper).log2().add(1).int()
@@ -401,7 +405,11 @@ class LinearClassifier:
                 try:
                     # compute utilization (memory peaks before backprop)
                     size = (low + up) // 2
-                    batch = torch.empty((size, feat), requires_grad=stage == "crafting")
+                    batch = torch.empty(
+                        (size, feat),
+                        device=self.device,
+                        requires_grad=stage == "crafting",
+                    )
                     out = self.model(batch)
                     util = torch.cuda.memory_allocated() / max_memory
                     stage != "inference" and out.sum().backward()
