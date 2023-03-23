@@ -1,8 +1,9 @@
 # Deep Learning Models Examples
 
 This directory contains various examples showing how `dlm` can be used. Note
-that these examples will write figures to this directory. All of these examples
-depend on the [mlds](https://github.com/sheatsley/datasets) repo.
+that these examples will write figures to this directory (and depend on
+`plotly`, `matplotlib`, or `seaborn`). All of these examples depend on the
+[mlds](https://github.com/sheatsley/datasets) repo.
 
 * `best_batch_size.py`: performs model training over a variety of batch sizes
 *   and plots model accuracy over batch size on training and validation data.
