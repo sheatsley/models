@@ -393,7 +393,7 @@ class LinearClassifier:
         utils = {s: 0 for s in stages}
         steps = torch.tensor(upper).log2().add(1).int()
         feat = self.params["features"]
-        _, max_memory = torch.cuda.mem_get_info()
+        _, total_memory = torch.cuda.mem_get_info()
 
         # update stage state and track grads appropriately
         for stage in stages:
@@ -401,7 +401,7 @@ class LinearClassifier:
             low = lower
             up = upper
             for i in range(steps):
-                print(f"Computing {stage} batch sizes... {i / steps:.2%}", end="\r")
+                print(f"Testing {stage} batch sizes... {i / steps:.2%}", end="\r")
                 try:
                     # compute utilization (memory peaks before backprop)
                     size = (low + up) // 2
@@ -411,8 +411,8 @@ class LinearClassifier:
                         requires_grad=stage == "crafting",
                     )
                     out = self.model(batch)
-                    util = torch.cuda.memory_allocated() / max_memory
                     stage != "inference" and out.sum().backward()
+                    util = torch.cuda.memory_reserved() / total_memory
 
                     # increase batch size and save largest viable batch size
                     low = max(low, size)
