@@ -158,7 +158,7 @@ Most initialization parameters are self-explanatory, but are listed here for
 reference.
 
 
-### Linear Classifier
+### Linear Classifiers
 
 `LinearClassifer` objects compile the simplest models and principally serves to
 define all of the bells and whistles that make training, evaluating, and
@@ -180,7 +180,7 @@ manipulating models easy. They accept the following parameters:
 * `threads`: number of threads to use when using the CPU
 * `verbosity`: print training statistics every verbosity%
 
-### Multilayer Perceptron
+### Multilayer Perceptrons
 
 `MLPClassifer` objects extend `LinearClassifier` to include support for
 activation functions, dropout, and hidden layers. These models are compiled
