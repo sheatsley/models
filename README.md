@@ -103,11 +103,12 @@ complex use cases.
     least [lazy
     modules](https://pytorch.org/docs/stable/generated/torch.nn.modules.lazy.LazyModuleMixin.html)
     are here to save us from that). _Auto-batching_ is a feature within all
-    `dlm.models` classes that attempts to find the maximal batch size for three
-    use cases: training, inference, and crafting adversarial examples. Upon
-    model initialization, if `auto_batch` is `True`, then, on `fit`, the
-    `max_batch_size` subroutine is called. This subroutine performs binary
-    search (by catching exceptions) over these three use cases with randomly
+    `dlm.models` classes that attempts to find the maximal batch size for a
+    specified memory utilization in three use scenarios: training, inference,
+    and crafting adversarial examples. Upon model initialization, if
+    `auto_batch` is nonzero, then, on `fit`, the `find_max_batch` subroutine is
+    called. This subroutine performs binary search on GPU memory utilization
+    (parameterized by `auto_batch`) over these three use cases with randomly
     generated data of varying batch sizes. Once the batch sizes are determined,
     the model is trained normally, and any interactions with the model are
     subsequently batched to the appropriate size (based on whether the model,
@@ -166,7 +167,7 @@ manipulating models easy. They accept the following parameters:
 
 * `attack`: attack to use when performing adversarial training
 * `attack_params`: parameters to configure the attack
-* `auto_batch`: automatically determine the max batch size when using GPUs
+* `auto_batch`: find batch sizes for target GPU memory utilization
 * `batch_size`: training batch size (-1 for 1 batch)
 * `classes`: number of classes
 * `device`: hardware device to use
