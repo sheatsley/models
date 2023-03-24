@@ -18,7 +18,6 @@ import torch
 # add mart loss
 # add gtsrb hparams
 # add cifar10 hparams
-# __call__ ONLY works when auto_batch (else max_batch is undefined)
 
 
 class LinearClassifier:
@@ -34,10 +33,10 @@ class LinearClassifier:
     :func:`__repr__`: returns parameters, optimizer, scheduler, and state
     :func:`accuracy`: returns model accuracy
     :func:`compile`: assembles a softmax regression model
+    :func:`find_max_batch`: computes max batch sizes for target gpu utilization
     :func:`fit`: performs model training
     :func:`init`: initializes training preqrequisites
     :func:`load`: load saved models
-    :func:`max_batch_size`: determines max batch size for gpus
     :func:`progress`: records various statistics on training progress
     :func:`save`: save models parameters (or entire model state)
     :func:`summary`: prints model architecture
@@ -56,7 +55,7 @@ class LinearClassifier:
         optimizer_params,
         scheduler,
         scheduler_params,
-        auto_batch=False,
+        auto_batch=0,
         classes=None,
         device="cpu",
         threads=-1,
@@ -74,8 +73,8 @@ class LinearClassifier:
         :type attack: aml Attack or Adversary class or None
         :param attack_params: attack parameters for adversarial training
         :type attack_params: dict
-        :param auto_batch: determine max batch size for gpu vram
-        :type auto_batch: bool
+        :param auto_batch: find max batch size for target gpu utilization
+        :type auto_batch: float
         :param batch_size: training batch size (-1 for 1 batch)
         :type batch_size: int
         :param classes: number of classes
@@ -105,7 +104,7 @@ class LinearClassifier:
         """
         self.attack_alg = attack
         self.attack_params = attack_params
-        self.auto_batch = auto_batch
+        self.auto_batch = auto_batch * (device == "cuda")
         self.batch_size = batch_size
         self.classes = classes
         self.device = device
@@ -122,10 +121,6 @@ class LinearClassifier:
             else min(threads, torch.get_num_threads())
         )
         self.verbosity = max(int(epochs * verbosity), 1 if verbosity else 0)
-        self.max_batch = dict.fromkeys(
-            ("training", "inference", "crafting"),
-            torch.iinfo(torch.int).max,
-        )
         self.state = "skeleton"
         self.params = {
             "attack": "N/A" if self.attack_alg is None else self.attack_alg.__name__,
@@ -146,8 +141,8 @@ class LinearClassifier:
         """
         This method returns the model logits. Optionally, gradient-tracking can
         be disabled for fast inference. Notably, when using nvidia gpus, if
-        auto_batch was set to True on __init__, then inputs are auto-batched to
-        sizes (determined by max_batch_size) that will fit within nvidia gpu
+        auto_batch was nonzero on __init__, then inputs are auto-batched to
+        sizes (determined by find_max_batch) that will fit within nvidia gpu
         vram prevent out-of-memory errors depending on whether we are training
         the model, performing inference, or crafting adversarial examples.
 
@@ -165,7 +160,7 @@ class LinearClassifier:
             if x.requires_grad
             else "training"
         )
-        split = x.size(0) if x.device.type != "cuda" else self.max_batch[stage]
+        split = x.size(0) if x.device.type != "cuda" else self.batch_sizes[stage]
         with torch.set_grad_enabled(grad_enabled):
             return torch.cat([self.model(xb.flatten(1)) for xb in x.split(split)])
 
@@ -220,6 +215,78 @@ class LinearClassifier:
         :rtype: torch.nn Sequential object
         """
         return torch.nn.Sequential(torch.nn.LazyLinear(self.classes))
+
+    def find_max_batch(self, target, lower=1, upper=500000):
+        """
+        This method computes the maximum possible batch size for a given target
+        utilization without causing out-of-memory errors in gpus for three
+        scenarios: (1) model training, (2) inference, and (3) crafting
+        adversarial examples. The optimal batch size across these scenarios is
+        determined via binary search. Notably, this method should only be
+        called when model state is not "skeleton" (i.e, the PyTorch sequential
+        container has been instantiated and its lazy modules initialized).
+
+        :param target: target memory utilization
+        :type target: float
+        :param lower_batch: smallest batch size to consider
+        :type lower_batch: int
+        :param upper_batch: largest batch size to consider
+        :type upper_batch: int
+        :return: max batch sizes for traing, inference, and crafting
+        :rtype: dict of ints
+        """
+
+        # return unconstrained batch sizes if target utlization is 0%
+        stages = "training", "inference", "crafting"
+        if target == 0:
+            return dict.fromkeys(stages, torch.iinfo(torch.int).max)
+
+        # initialize stage tracking parameters
+        sizes = {s: 1 for s in stages}
+        utils = {s: 0 for s in stages}
+        steps = torch.tensor(upper).log2().add(1).int()
+        feat = self.params["features"]
+        _, total_memory = torch.cuda.mem_get_info()
+
+        # update stage state and track grads appropriately
+        for stage in stages:
+            self.model.requires_grad_(stage == "training")
+            low = lower
+            up = upper
+            for i in range(steps):
+                print(f"Testing {stage} batch sizes... {i / steps:.2%}", end="\r")
+                try:
+                    # compute utilization
+                    size = (low + up) // 2
+                    batch = torch.empty(
+                        (size, feat),
+                        device=self.device,
+                        requires_grad=stage == "crafting",
+                    )
+                    out = self.model(batch)
+                    stage != "inference" and out.sum().backward()
+                    util = torch.cuda.memory_reserved() / total_memory
+
+                    # adjust next size and save closest size under target
+                    if util < target:
+                        low = max(low, size)
+                        sizes[stage] = max(sizes[stage], size)
+                        utils[stage] = max(utils[stage], util)
+                    else:
+                        raise RuntimeError
+
+                # gpu was oversubscribed; decrease batch size
+                except RuntimeError:
+                    up = min(up, size)
+
+                # release resources
+                out = None
+                batch.grad = None
+                self.model.zero_grad(set_to_none=True)
+                torch.cuda.empty_cache()
+        r = (f"{stage}: {sizes[stage]} ({utils[stage]:.2%})," for stage in stages)
+        print("Batch size search complete.", *r, end="\n" if self.verbosity else "\r")
+        return sizes
 
     def fit(self, x, y, valset=0.0):
         """
@@ -357,7 +424,7 @@ class LinearClassifier:
         self.state = "untrained"
 
         # find max batch size, build validation set, and prepare data loader
-        self.max_batch = self.max_batch_size() if self.auto_batch else self.max_batch
+        self.batch_sizes = self.find_max_batch(self.auto_batch)
         dataset = torch.utils.data.TensorDataset(x, y)
         if isinstance(valset, float):
             nval = int(y.numel() * valset)
@@ -368,69 +435,6 @@ class LinearClassifier:
             tsub = dataset
             vsub = torch.utils.data.TensorDataset(*valset)
         return tsub, vsub
-
-    def max_batch_size(self, lower=1, upper=500000):
-        """
-        This method computes the maximum possible batch size without causing
-        out-of-memory errors in gpus for three scenarios: (1) model training,
-        (2) inference, and (3) crafting adversarial examples. The optimal batch
-        size across these scenarios is determined via binary search. Notably,
-        this method should only be called when model state is not "skeleton"
-        (that is, the PyTorch sequential container has been instantiated and
-        its lazy modules initialized).
-
-        :param lower_batch: smallest batch size to consider
-        :type lower_batch: int
-        :param upper_batch: largest batch size to consider
-        :type upper_batch: int
-        :return: max batch sizes for traing, inference, and crafting
-        :rtype: dict of ints
-        """
-
-        # initialize stage tracking parameters
-        stages = self.max_batch.keys()
-        sizes = {s: 1 for s in stages}
-        utils = {s: 0 for s in stages}
-        steps = torch.tensor(upper).log2().add(1).int()
-        feat = self.params["features"]
-        _, total_memory = torch.cuda.mem_get_info()
-
-        # update stage state and track grads appropriately
-        for stage in stages:
-            self.model.requires_grad_(stage == "training")
-            low = lower
-            up = upper
-            for i in range(steps):
-                print(f"Testing {stage} batch sizes... {i / steps:.2%}", end="\r")
-                try:
-                    # compute utilization (memory peaks before backprop)
-                    size = (low + up) // 2
-                    batch = torch.empty(
-                        (size, feat),
-                        device=self.device,
-                        requires_grad=stage == "crafting",
-                    )
-                    out = self.model(batch)
-                    stage != "inference" and out.sum().backward()
-                    util = torch.cuda.memory_reserved() / total_memory
-
-                    # increase batch size and save largest viable batch size
-                    low = max(low, size)
-                    sizes[stage] = max(sizes[stage], size)
-                    utils[stage] = max(utils[stage], util)
-
-                # gpu was oversubscribed; decrease batch size
-                except RuntimeError:
-                    up = min(up, size)
-
-                # release resources
-                out = None
-                batch.grad = None
-                self.model.zero_grad(set_to_none=True)
-                torch.cuda.empty_cache()
-        r = (f"{stage} size: {sizes[stage]} ({utils[stage]:.2%})," for stage in stages)
-        print("Search complete.", *r)
-        return sizes
 
     def progress(self, e, tacc, tloss, vset):
         """
@@ -610,10 +614,10 @@ class MLPClassifier(LinearClassifier):
     :func:`__getattr__`: return torch.nn Sequential object attributes
     :func:`__repr__`: returns parameters, optimizer, scheduler, and state
     :func:`accuracy`: returns model accuracy
+    :func:`find_max_batch`: computes max batch sizes for target gpu utilization
     :func:`fit`: performs model training
     :func:`init`: initializes training preqrequisites
     :func:`load`: load saved models
-    :func:`max_batch_size`: determines max batch size for gpus
     :func:`progress`: records various statistics on training progress
     :func:`save`: save models parameters (or entire model state)
     :func:`summary`: prints model architecture
@@ -695,10 +699,10 @@ class CNNClassifier(MLPClassifier):
     :func:`__getattr__`: return torch.nn Sequential object attributes
     :func:`__repr__`: returns parameters, optimizer, scheduler, and state
     :func:`accuracy`: returns model accuracy
+    :func:`find_max_batch`: computes max batch sizes for target gpu utilization
     :func:`fit`: performs model training
     :func:`init`: initializes training preqrequisites
     :func:`load`: load saved models
-    :func:`max_batch_size`: determines max batch size for gpus
     :func:`progress`: records various statistics on training progress
     :func:`save`: save models parameters (or entire model state)
     :func:`summary`: prints model architecture
