@@ -227,9 +227,9 @@ class FunctionalTests(unittest.TestCase):
         :param classes: number of classes
         :type classes: int
         :param model: model to verify
-        :type model: torch.nn Sequential object
+        :type model: torch.nn.modules.container Sequential object
         :param activation: activation function used
-        :type activation: torch.nn module class
+        :type activation: torch.nn.modules.activation class
         :param conv_layers: number of filters at each convolutional layers
         :type conv_layers: tuple of ints
         :param dropout: dropout rate
@@ -295,7 +295,7 @@ class FunctionalTests(unittest.TestCase):
         :param features: number of features
         :type features: int
         :param model: model to verify
-        :type model: torch.nn Sequential object
+        :type model: torch.nn.modules.container Sequential object
         :return: None
         :rtype: NoneType
         """
@@ -317,9 +317,9 @@ class FunctionalTests(unittest.TestCase):
         :param features: number of features
         :type features: int
         :param model: model to verify
-        :type model: torch.nn Sequential object
+        :type model: torch.nn.modules.container Sequential object
         :param activation: activation function used
-        :type activation: torch.nn module class
+        :type activation: torch.nn.modules.activation class
         :param dropout: dropout rate
         :type dropout: float
         :param hidden_layers: number of neurons at each hidden layers

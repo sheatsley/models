@@ -86,7 +86,7 @@ class LinearClassifier:
         :param learning_rate: learning rate
         :type learning_rate: float
         :param loss: loss function
-        :type loss: torch.nn class
+        :type loss: torch.nn.modules.loss class
         :param optimizer: optimizer from optimizers package
         :type optimizer: torch.optim class
         :param optimizer_params: optimizer parameters
@@ -166,9 +166,9 @@ class LinearClassifier:
 
     def __getattr__(self, name):
         """
-        This method ostensibly aliases torch.nn Sequential objects (i.e.,
-        self.model) attributes to be accessible by this object directly. It is
-        principally used for better readability and easier debugging.
+        This method ostensibly aliases torch.nn.modules.container Sequential
+        objects (i.e., self.model) attributes to be accessible by this object
+        directly. It is principally used for readability and debugging.
 
         :param name: name of the attribute to recieve from self.model
         :type name: str
@@ -208,11 +208,12 @@ class LinearClassifier:
 
     def compile(self):
         """
-        This method instantiates a torch.nn Sequential object. This abstraction
-        allows us to dynamically build models based on the passed-in dataset.
+        This method instantiates a torch.nn.modules.container Sequential
+        object. This abstraction allows us to dynamically build models based on
+        the passed-in dataset.
 
         :return: an untrained linear classifier
-        :rtype: torch.nn Sequential object
+        :rtype: torch.nn.modules.container Sequential object
         """
         return torch.nn.Sequential(torch.nn.LazyLinear(self.classes))
 
@@ -291,10 +292,11 @@ class LinearClassifier:
     def fit(self, x, y, valset=0.0):
         """
         This method is the heart of all LinearClassifier-inherited objects. It
-        performs four functions: (1) instantiates a model (i.e., torch.nn
-        Sequential object), (2) initializes training prequisites (and updates
-        metadata) (3) optionally performs adversarial training, and (4)
-        computes training (plus validation and robustness) statistics.
+        performs four functions: (1) instantiates a model (i.e.,
+        torch.nn.modules.container Sequential object), (2) initializes training
+        prerequisites (and updates metadata) (3) performs adversarial training
+        (if desired), and (4) computes training (plus validation and
+        robustness) statistics.
 
         :param x: training inputs
         :type x: torch Tensor object (n, m)
@@ -506,10 +508,10 @@ class LinearClassifier:
 
         Notably, there are some subtlies in loading state dictionaries with
         lazy modules in that they *must* be initialized before the state dict
-        can be loaded. To this end, if a torch.nn Sequential object is not an
-        attribute of this class, then the number of input features and clases
-        are inferred from the state dict, compile is called, and model is
-        initialized through a dry run.
+        can be loaded. To this end, if a torch.nn.modules.container Sequential
+        object is not an attribute of this class, then the number of input
+        features and clases are inferred from the state dict, compile is
+        called, and model is initialized through a dry run.
 
         :param path: path to the pretrained model
         :type path: pathlib Path object
@@ -553,7 +555,7 @@ class LinearClassifier:
     def save(self, path, slim=True):
         """
         This method saves either the entire model or just the state_dict
-        associated with the torch.nn Sequential containers.
+        associated with the torch.nn.modules.container Sequential containers.
 
         :param path: path (including filename) to save the model
         :type path: pathlib Path object
@@ -645,7 +647,7 @@ class MLPClassifier(LinearClassifier):
         initialization.
 
         :param activation: activation function at each hidden layer
-        :type activation: torch.nn class
+        :type activation: torch.nn.modules.activation class
         :param dropout: dropout probability
         :type dropout: float
         :param hidden_layers: the number of neurons at each hidden layer
@@ -669,13 +671,13 @@ class MLPClassifier(LinearClassifier):
     def compile(self):
         """
         Like the implementation of compile from the LinearClassifier class,
-        this method instantiates a torch.nn Sequential object. It additionally
-        adds support for interleaving activation functions, dropout layers, and
-        hidden layers. This abstraction allows us to dynamically build models
-        based on the passed-in dataset.
+        this method instantiates a torch.nn.modules.container Sequential
+        object. It additionally adds support for interleaving activation
+        functions, dropout layers, and hidden layers. This abstraction allows
+        us to dynamically build models based on the passed-in dataset.
 
         :return: an untrained multi-layer linear classifier
-        :rtype: torch.nn Sequential object
+        :rtype: torch.nn.modules.container Sequential object
         """
         components = (
             [torch.nn.Dropout(self.dropout)],
@@ -753,15 +755,16 @@ class CNNClassifier(MLPClassifier):
     def compile(self):
         """
         Like the implementation of compile from the MLPClassifier class, this
-        method instantiates a torch.nn Sequential object. It additionally adds
-        support for interleaving activation functions, convolutional layers,
-        and maxpool layers. This abstraction allows us to dynamically build
-        models based on the passed-in dataset. Importantly, this method
-        asssumes that inputs are flattened vectors to be reshaped according to
-        shape for interoperability with https://github.com/sheatsley/datasets.
+        method instantiates a torch.nn.modules.container Sequential object. It
+        additionally adds support for interleaving activation functions,
+        convolutional layers, and maxpool layers. This abstraction allows us to
+        dynamically build models based on the passed-in dataset. Importantly,
+        this method asssumes that inputs are flattened vectors to be reshaped
+        according to shape for interoperability with
+        https://github.com/sheatsley/datasets.
 
         :return: an untrained convolutional neural network classifier
-        :rtype: torch Sequential object
+        :rtype: torch.nn.modules.container Sequential object
         """
 
         # assemble convolutional layers
