@@ -169,6 +169,7 @@ manipulating models easy. They accept the following parameters:
 * `attack_params`: parameters to configure the attack
 * `auto_batch`: find batch sizes for target GPU memory utilization
 * `batch_size`: training batch size (-1 for 1 batch)
+* `benchmark`: [find optimal convolutional algorithms with cuDNN](https://pytorch.org/docs/stable/backends.html?highlight=benchmark#torch.backends.cudnn.torch.backends.cudnn.benchmark)
 * `classes`: number of classes
 * `device`: hardware device to use
 * `epochs`: number of training iterations
