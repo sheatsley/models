@@ -56,6 +56,7 @@ class LinearClassifier:
         scheduler,
         scheduler_params,
         auto_batch=0,
+        benchmark=True,
         classes=None,
         device="cpu",
         threads=-1,
@@ -77,6 +78,8 @@ class LinearClassifier:
         :type auto_batch: float
         :param batch_size: training batch size (-1 for 1 batch)
         :type batch_size: int
+        :param benchmark: enable torch auto-tuner for cuDNN algorithms
+        :type benchmark: bool
         :param classes: number of classes
         :type classes: int
         :param device: hardware device to use
@@ -106,6 +109,7 @@ class LinearClassifier:
         self.attack_params = attack_params
         self.auto_batch = auto_batch * (device == "cuda")
         self.batch_size = batch_size
+        self.benchmark = benchmark
         self.classes = classes
         self.device = device
         self.epochs = epochs
@@ -323,13 +327,15 @@ class LinearClassifier:
             self.summary()
 
         # configure dataloaders, results dataframe, threads, and training mode
-        tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True)
-        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
+        dlp = dict(num_workers=4, pin_memory=True)
+        tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True, **dlp)
+        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)), **dlp)
         parts, stats = ("training", "validation", "adversarial"), ("accuracy", "loss")
         metrics = ["epoch"] + [f"{p}_{m}" for p in parts for m in stats]
         self.res = pandas.DataFrame(0, index=range(1, self.epochs + 1), columns=metrics)
         max_threads = torch.get_num_threads()
         torch.set_num_threads(self.threads)
+        torch.backends.cudnn.benchmark = self.benchmark
         self.model.train()
         d = (
             torch.cuda.get_device_name()
@@ -375,6 +381,7 @@ class LinearClassifier:
         # set model to eval mode, restore thread count, and update state
         self.model.eval()
         torch.set_num_threads(max_threads)
+        torch.backends.cudnn.benchmark = False
         self.state = (
             "trained"
             if self.attack is None
