@@ -327,7 +327,7 @@ class LinearClassifier:
             self.summary()
 
         # configure dataloaders, results dataframe, threads, and training mode
-        dlp = dict(num_workers=4, pin_memory=True)
+        dlp = dict(num_workers=4 if self.device == "cuda" else 0, pin_memory=True)
         tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True, **dlp)
         vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)), **dlp)
         parts, stats = ("training", "validation", "adversarial"), ("accuracy", "loss")
@@ -475,9 +475,9 @@ class LinearClassifier:
             vacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
             vstr = (
                 f"Val Acc: {vacc:.1%} "
-                f"({vacc - self.res.validation_accuracy.iloc[-2]:+.2%}) "
+                f"({vacc - self.res.validation_accuracy.iloc[e - 2]:+.2%}) "
                 f"Val Loss {vloss:.2f} "
-                f"({vloss - self.res.validation_loss.iloc[-2]:+.2f}) "
+                f"({vloss - self.res.validation_loss.iloc[e - 2]:+.2f}) "
             )
 
             # compute adversarial metrics and str representation
@@ -487,18 +487,18 @@ class LinearClassifier:
                 aacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
                 astr = (
                     f"Adv Acc: {aacc:.1%} "
-                    f"({aacc - self.res.adversarial_accuracy.iloc[-2]:+.2%}) "
+                    f"({aacc - self.res.adversarial_accuracy.iloc[e - 2]:+.2%}) "
                     f"Adv Loss: {aloss:.2f} "
-                    f"({aloss - self.res.adversarial_loss.iloc[-2]:+.2f}) "
+                    f"({aloss - self.res.adversarial_loss.iloc[e - 2]:+.2f}) "
                 )
         self.res.loc[e] = e, tacc, tloss, vacc, vloss, aacc, aloss
 
         # build str representation and return
         return (
             f"Accuracy: {tacc:.1%} "
-            f"({tacc - self.res.training_accuracy.iloc[-2]:+.2%}) "
+            f"({tacc - self.res.training_accuracy.iloc[e - 2]:+.2%}) "
             f"Loss: {tloss:.2f} "
-            f"({tloss - self.res.training_loss.iloc[-2]:+.2f}) "
+            f"({tloss - self.res.training_loss.iloc[e - 2]:+.2f}) "
             f"{vstr}{astr}"
         )
 
