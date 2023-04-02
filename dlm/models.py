@@ -321,9 +321,8 @@ class LinearClassifier:
 
         # configure dataloaders, results dataframe, threads, and training mode
         self.batch_size = min(self.batch_size, self.sizes["training"])
-        dlp = dict(num_workers=4 if self.device == "cuda" else 0, pin_memory=True)
-        tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True, **dlp)
-        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)), **dlp)
+        tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True)
+        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
         parts, stats = ("training", "validation", "adversarial"), ("accuracy", "loss")
         metrics = ["epoch"] + [f"{p}_{m}" for p in parts for m in stats]
         self.res = pandas.DataFrame(0, index=range(1, self.epochs + 1), columns=metrics)
