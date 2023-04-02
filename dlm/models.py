@@ -148,7 +148,7 @@ class LinearClassifier:
         auto_batch was nonzero on __init__, then inputs are auto-batched to
         sizes (determined by find_max_batch) that will fit within nvidia gpu
         vram prevent out-of-memory errors depending on whether we are training
-        the model, performing inference, or crafting adversarial examples.
+        the model or performing inference.
 
         :param x: the batch of inputs
         :type x: torch Tensor object (n, m)
@@ -157,14 +157,7 @@ class LinearClassifier:
         :return: model logits
         :rtype: torch Tensor object (n, c)
         """
-        stage = (
-            "inference"
-            if not grad_enabled
-            else "crafting"
-            if x.requires_grad
-            else "training"
-        )
-        split = x.size(0) if x.device.type != "cuda" else self.batch_sizes[stage]
+        split = self.size["inference"] if x.is_cuda and not grad_enabled else x.size(0)
         with torch.set_grad_enabled(grad_enabled):
             return torch.cat([self.model(xb.flatten(1)) for xb in x.split(split)])
 
@@ -327,6 +320,7 @@ class LinearClassifier:
             self.summary()
 
         # configure dataloaders, results dataframe, threads, and training mode
+        self.batch_size = min(self.batch_size, self.size["training"])
         dlp = dict(num_workers=4 if self.device == "cuda" else 0, pin_memory=True)
         tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True, **dlp)
         vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)), **dlp)
@@ -433,7 +427,7 @@ class LinearClassifier:
         self.state = "untrained"
 
         # find max batch size, build validation set, and prepare data loader
-        self.batch_sizes = self.find_max_batch(self.auto_batch)
+        self.sizes = self.find_max_batch(self.auto_batch)
         dataset = torch.utils.data.TensorDataset(x, y)
         if isinstance(valset, float):
             nval = int(y.numel() * valset)
