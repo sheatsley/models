@@ -56,7 +56,7 @@ y_test = torch.from_numpy(mnist.test.labels).long()
 
 # instantiate and adversarially train a model
 model = dlm.CNNClassifier(activation=torch.nn.ReLU,
-            attack=aml.pgd, 
+            attack=aml.pgd,
             attack_params=dict(
                alpha=0.01,
                epochs=40,
@@ -110,9 +110,10 @@ complex use cases.
     called. This subroutine performs binary search on GPU memory utilization
     (parameterized by `auto_batch`) over these three use cases with randomly
     generated data of varying batch sizes. Once the batch sizes are determined,
-    the model is trained normally, and any interactions with the model are
-    subsequently batched to the appropriate size (based on whether the model,
-    the inputs, or neither, are tracking gradients).
+    training and inference stages subsequently batched to the appropriate size
+    based on whether the model parameters are tracking gradients (batching for
+    crafting needs to be handled manually, since computational graphs typically
+    go beyond the model itself).
 
 * Classes: When `classes` is not provided on model initialization, it will be
     inferred from the number of unique elements on the label set during
@@ -158,7 +159,6 @@ device.
 Most initialization parameters are self-explanatory, but are listed here for
 reference.
 
-
 ### Linear Classifiers
 
 `LinearClassifer` objects compile the simplest models and principally serves to
@@ -194,7 +194,7 @@ model logits. In addition to `LinearClassifier` arguments, the following
 parameters are also accepted:
 
 * `activation`: activation function to use
-* `dropout`: dropout probability 
+* `dropout`: dropout probability
 * `hiddden_layers`: the number of neurons at each hidden layer
 
 ### Convolutional Neural Networks
