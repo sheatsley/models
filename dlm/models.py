@@ -350,7 +350,7 @@ class LinearClassifier:
             for xb, yb in tset:
                 self.model.requires_grad_(False)
                 if self.attack is not None:
-                    xb = self.attack.craft(xb, yb, reset=True)
+                    xb = xb.add(self.attack.craft(xb, yb, reset=True))
                 self.model.requires_grad_(True)
                 logits = self(xb)
                 loss = self.loss(logits, yb)
@@ -532,7 +532,8 @@ class LinearClassifier:
 
             # compute adversarial metrics and str representation
             if self.attack is not None:
-                logits = self(self.attack.craft(vx, vy, reset=True), grad_enabled=False)
+                vxa = vx.add(self.attack.craft(vx, vy, reset=True))
+                logits = self(vxa, grad_enabled=False)
                 aloss = self.loss(logits, vy).item()
                 aacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
                 astr = (
