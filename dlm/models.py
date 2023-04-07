@@ -438,63 +438,6 @@ class LinearClassifier:
             vsub = torch.utils.data.TensorDataset(*valset)
         return tsub, vsub
 
-    def progress(self, e, tacc, tloss, vset):
-        """
-        This method measures various statistics on the training process and a
-        formatted string concisely representing the state model. Specifically,
-        this computes the following at each epoch (and the change since the
-        last epoch): (1) training accuracy & loss, (2) validation accuracy &
-        loss, and (3) adversarial accuracy & loss (on the validation set).
-
-        :param e: current epoch
-        :type e: int
-        :param tacc: current training accuracy
-        :type tacc: float
-        :param tloss: current training loss
-        :type tloss: float
-        :param vset: validation set
-        :type vset: torch.utils.data DataLoader object
-        :return: print-ready statistics
-        :rtype: str
-        """
-
-        # compute validation statistics and str representation
-        vacc = vloss = aacc = aloss = 0
-        vstr = astr = ""
-        if len(vset) > 0:
-            vx, vy = next(iter(vset))
-            logits = self(vx, grad_enabled=False)
-            vloss = self.loss(logits, vy).item()
-            vacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
-            vstr = (
-                f"Val Acc: {vacc:.1%} "
-                f"({vacc - self.res.validation_accuracy.iloc[e - 2]:+.2%}) "
-                f"Val Loss {vloss:.2f} "
-                f"({vloss - self.res.validation_loss.iloc[e - 2]:+.2f}) "
-            )
-
-            # compute adversarial metrics and str representation
-            if self.attack is not None:
-                logits = self(self.attack.craft(vx, vy, reset=True), grad_enabled=False)
-                aloss = self.loss(logits, vy).item()
-                aacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
-                astr = (
-                    f"Adv Acc: {aacc:.1%} "
-                    f"({aacc - self.res.adversarial_accuracy.iloc[e - 2]:+.2%}) "
-                    f"Adv Loss: {aloss:.2f} "
-                    f"({aloss - self.res.adversarial_loss.iloc[e - 2]:+.2f}) "
-                )
-        self.res.loc[e] = e, tacc, tloss, vacc, vloss, aacc, aloss
-
-        # build str representation and return
-        return (
-            f"Accuracy: {tacc:.1%} "
-            f"({tacc - self.res.training_accuracy.iloc[e - 2]:+.2%}) "
-            f"Loss: {tloss:.2f} "
-            f"({tloss - self.res.training_loss.iloc[e - 2]:+.2f}) "
-            f"{vstr}{astr}"
-        )
-
     def load(self, path):
         """
         This method loads pretrained PyTorch model parameters. Specifically,
@@ -551,6 +494,63 @@ class LinearClassifier:
         self.summary()
         self.model.eval()
         return self
+
+    def progress(self, e, tacc, tloss, vset):
+        """
+        This method measures various statistics on the training process and a
+        formatted string concisely representing the state model. Specifically,
+        this computes the following at each epoch (and the change since the
+        last epoch): (1) training accuracy & loss, (2) validation accuracy &
+        loss, and (3) adversarial accuracy & loss (on the validation set).
+
+        :param e: current epoch
+        :type e: int
+        :param tacc: current training accuracy
+        :type tacc: float
+        :param tloss: current training loss
+        :type tloss: float
+        :param vset: validation set
+        :type vset: torch.utils.data DataLoader object
+        :return: print-ready statistics
+        :rtype: str
+        """
+
+        # compute validation statistics and str representation
+        vacc = vloss = aacc = aloss = 0
+        vstr = astr = ""
+        if len(vset) > 0:
+            vx, vy = next(iter(vset))
+            logits = self(vx, grad_enabled=False)
+            vloss = self.loss(logits, vy).item()
+            vacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
+            vstr = (
+                f"Val Acc: {vacc:.1%} "
+                f"({vacc - self.res.validation_accuracy.iloc[e - 2]:+.2%}) "
+                f"Val Loss {vloss:.2f} "
+                f"({vloss - self.res.validation_loss.iloc[e - 2]:+.2f}) "
+            )
+
+            # compute adversarial metrics and str representation
+            if self.attack is not None:
+                logits = self(self.attack.craft(vx, vy, reset=True), grad_enabled=False)
+                aloss = self.loss(logits, vy).item()
+                aacc = logits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
+                astr = (
+                    f"Adv Acc: {aacc:.1%} "
+                    f"({aacc - self.res.adversarial_accuracy.iloc[e - 2]:+.2%}) "
+                    f"Adv Loss: {aloss:.2f} "
+                    f"({aloss - self.res.adversarial_loss.iloc[e - 2]:+.2f}) "
+                )
+        self.res.loc[e] = e, tacc, tloss, vacc, vloss, aacc, aloss
+
+        # build str representation and return
+        return (
+            f"Accuracy: {tacc:.1%} "
+            f"({tacc - self.res.training_accuracy.iloc[e - 2]:+.2%}) "
+            f"Loss: {tloss:.2f} "
+            f"({tloss - self.res.training_loss.iloc[e - 2]:+.2f}) "
+            f"{vstr}{astr}"
+        )
 
     def save(self, path, slim=True):
         """
