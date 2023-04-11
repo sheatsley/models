@@ -16,8 +16,6 @@ import torch
 # update all hyperparameters
 # add trades loss
 # add mart loss
-# add gtsrb hparams
-# add cifar10 hparams
 
 
 class LinearClassifier:
@@ -349,8 +347,10 @@ class LinearClassifier:
             # perform one iteration of training
             for xb, yb in tset:
                 self.model.requires_grad_(False)
+                self.model.eval()
                 if self.attack is not None:
                     xb = xb.add(self.attack.craft(xb, yb, reset=True))
+                self.model.train()
                 self.model.requires_grad_(True)
                 logits = self(xb)
                 loss = self.loss(logits, yb)
