@@ -363,7 +363,9 @@ class LinearClassifier:
             self.scheduler is not None and self.scheduler.step()
 
             # compute training statistics every epoch and update results
+            self.model.eval()
             prog = self.progress(e, tacc.div(len(tsub)).item(), tloss.item(), vset)
+            self.model.train()
             print(
                 f"Epoch {e:{len(str(self.epochs))}} / {self.epochs} {prog}"
             ) if verbose and not e % self.verbosity else print(
