@@ -509,6 +509,7 @@ class LinearClassifier:
         self.params["classes"] = self.classes
         self.state = "pretrained"
         self.summary()
+        self.model.requires_grad_(False)
         self.model.eval()
         return self
 
