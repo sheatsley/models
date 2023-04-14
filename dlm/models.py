@@ -16,6 +16,7 @@ import torch
 # update all hyperparameters
 # add trades loss
 # add mart loss
+# lr should be an opt param
 
 
 class LinearClassifier:
@@ -440,7 +441,7 @@ class LinearClassifier:
             vsub = torch.utils.data.TensorDataset(*valset)
         return tsub, vsub
 
-    def load(self, path):
+    def load(self, path, override=False):
         """
         This method loads pretrained PyTorch model parameters. Specifically,
         this supports loading either: (1) complete models (e.g., trained torch
@@ -457,6 +458,15 @@ class LinearClassifier:
         object is not an attribute of this class, then the number of input
         features and clases are inferred from the state dict, compile is
         called, and model is initialized through a dry run.
+
+        Finally, the simple design interface for dlm means that some models may
+        have extra layers compared to the pretrained model. For example, since
+        dlm convolutional neural networks begin by unflattening the input, the
+        first set of convolutional parameters are stored in "1.weight/bias"
+        (instead of commonly "0.weight/bias"). To this end, the override
+        argument can be used to ostensibly ignore the keys in the loaded state
+        dict during restore. Assuming an identical model architecture, this is
+        likely to "just work", given that PyTorch state dicts are ordered.
 
         :param path: path to the pretrained model
         :type path: pathlib Path object
@@ -480,6 +490,11 @@ class LinearClassifier:
                 self.classes = next(reversed(model.values())).size(0)
                 self.model = self.compile()
                 self(torch.empty((1, features)), grad_enabled=False)
+                model = (
+                    {n: p for n, p in zip(self.model.state_dict(), model.values())}
+                    if override
+                    else model
+                )
                 self.model.load_state_dict(model)
                 self.model.to(self.device)
 
@@ -721,8 +736,10 @@ class CNNClassifier(MLPClassifier):
 
     def __init__(
         self,
+        conv_kernel,
         conv_layers,
-        kernel_size,
+        conv_padding,
+        pool_kernel,
         shape,
         **mlp_args,
     ):
@@ -734,10 +751,14 @@ class CNNClassifier(MLPClassifier):
         of number of features and labels (thematically similar to Keras) on
         initialization.
 
+        :param conv_kernel: size of the convolving kernel
+        :type conv_kernel: int
         :param conv_layers: the number of filters at each convolutional layer
         :type conv_layers: tuple of ints
-        :param kernel_size: size of the convolving kernel
-        :type kernel_size: int
+        :param conv_padding: amount of padding applied to the input
+        :type conv_padding: int or str
+        :param pool_kernel: size of the max pool window
+        :type pool_kernel: int
         :param shape: original input shape (channels, width, height)
         :type shape: tuple of ints
         :param mlp_args: MLPClassifier arguments
@@ -746,12 +767,16 @@ class CNNClassifier(MLPClassifier):
         :rtype: CNNClassifier object
         """
         super().__init__(**mlp_args)
+        self.conv_kernel = conv_kernel
         self.conv_layers = conv_layers
-        self.kernel_size = kernel_size
+        self.conv_padding = conv_padding
+        self.pool_kernel = pool_kernel
         self.shape = shape
         self.params = self.params | {
+            "conv_kernel": conv_kernel,
             "conv_layers": conv_layers,
-            "kernel_size": kernel_size,
+            "conv_padding": conv_padding,
+            "pool_kernel": pool_kernel,
         }
         return None
 
@@ -772,9 +797,14 @@ class CNNClassifier(MLPClassifier):
 
         # assemble convolutional layers
         convolutional = (
-            map(lambda c: torch.nn.LazyConv2d(c, self.kernel_size), self.conv_layers),
+            map(
+                lambda c: torch.nn.LazyConv2d(
+                    c, self.conv_kernel, padding=self.conv_padding
+                ),
+                self.conv_layers,
+            ),
             [self.activation()],
-            [torch.nn.MaxPool2d(self.kernel_size)],
+            [torch.nn.MaxPool2d(self.pool_kernel)],
         )
 
         # unflatten and attach convolutional and linear layers with flatten
