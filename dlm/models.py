@@ -507,6 +507,7 @@ class LinearClassifier:
         self.classes = self.model[-1].out_features
         self.params["features"] = features
         self.params["classes"] = self.classes
+        self.sizes = self.find_max_batch(0)
         self.state = "pretrained"
         self.summary()
         self.model.requires_grad_(False)
