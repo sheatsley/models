@@ -2,21 +2,12 @@
 This module defines the core for the deep learning models repo. All supported
 deep learning models are defined here, with the LinearClassifier class defining
 the primary features across all models (which all inherit from
-LinearClassifier). Much like Keras, these classes define simple interfaces to
-support rapid prototyping of standard deep learning models.
-Author: Ryan Sheatsley & Blaine Hoak
-Thu Feb 2 2023
+LinearClassifier).
 """
 import itertools
 
 import pandas
 import torch
-
-# TODO
-# update all hyperparameters
-# add trades loss
-# add mart loss
-# lr should be an opt param
 
 
 class LinearClassifier:
