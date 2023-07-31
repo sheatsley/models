@@ -2,8 +2,6 @@
 This module defines the state-of-the-art architectures and hyperparameters for
 a variety of datasets from https://github.com/sheatsley/datasets. It serves as
 a form of bookkeeping to be passed as arguments to model instantiations.
-Author: Ryan Sheatsley and Blaine Hoak
-Thu Feb 2 2023
 """
 import torch
 
@@ -91,35 +89,6 @@ class fmnist:
     )
 
 
-class nslkdd:
-    """
-    The NSL-KDD (https://www.unb.ca/cic/datasets/nsl.html) contains extracted
-    feature vectors from PCAPs that contain various information about traffic
-    flows. It has five labels that describe benign traffic, denial-of-service
-    attacks, network probes, user-to-root attacks, and remote-to-local attacks.
-    The current state-of-the-art MLP accuracy is ~82%
-    (https://www.ee.ryerson.ca/~bagheri/papers/cisda.pdf).
-    """
-
-    classes = 5
-    mlp = dict(
-        activation=torch.nn.ReLU,
-        attack=None,
-        attack_params={},
-        batch_size=128,
-        classes=classes,
-        dropout=0.0,
-        epochs=4,
-        hidden_layers=(60, 32),
-        learning_rate=1e-2,
-        loss=torch.nn.CrossEntropyLoss,
-        optimizer=torch.optim.Adam,
-        optimizer_params={},
-        scheduler=None,
-        scheduler_params={},
-    )
-
-
 class mnist:
     """
     MNIST (http://yann.lecun.com/exdb/mnist/) is a dataset for predicting
@@ -166,6 +135,35 @@ class mnist:
         scheduler=None,
         scheduler_params={},
         shape=shape,
+    )
+
+
+class nslkdd:
+    """
+    The NSL-KDD (https://www.unb.ca/cic/datasets/nsl.html) contains extracted
+    feature vectors from PCAPs that contain various information about traffic
+    flows. It has five labels that describe benign traffic, denial-of-service
+    attacks, network probes, user-to-root attacks, and remote-to-local attacks.
+    The current state-of-the-art MLP accuracy is ~82%
+    (https://www.ee.ryerson.ca/~bagheri/papers/cisda.pdf).
+    """
+
+    classes = 5
+    mlp = dict(
+        activation=torch.nn.ReLU,
+        attack=None,
+        attack_params={},
+        batch_size=128,
+        classes=classes,
+        dropout=0.0,
+        epochs=4,
+        hidden_layers=(60, 32),
+        learning_rate=1e-2,
+        loss=torch.nn.CrossEntropyLoss,
+        optimizer=torch.optim.Adam,
+        optimizer_params={},
+        scheduler=None,
+        scheduler_params={},
     )
 
 
