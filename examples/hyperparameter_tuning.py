@@ -1,7 +1,6 @@
 """
-This script performs basic hyperparameter tuning.
-Author: Ryan Sheatsley
-Sun Feb 24 2023
+This script performs basic hyperparameter tuning and produces a parallel
+coordiantes plot over the parameter space.
 """
 import argparse
 import itertools
@@ -15,31 +14,6 @@ import torch
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)
-
-
-def plot(dataset, results):
-    """
-    This function plots hyperparameter tuning results. Specifically, this
-    produces a parallel coordiantes plot over the parameter space. Notably,
-    this plot assumes that all entries in the dataframe are floats in 0-1. The
-    plot is written to disk in the current directory.
-
-    :param dataset: dataset used
-    :type dataset: str
-    :param results: results of the performance measurements
-    :type results: pandas Dataframe object
-    :return: None
-    :rtype: NoneType
-    """
-    fig = px.parallel_categories(
-        data_frame=results,
-        color="validation_accuracy",
-        color_continuous_scale=px.colors.diverging.BrBG,
-        range_color=(0, 1),
-        title=f"{dataset}",
-    )
-    fig.write_image(__file__[:-3] + f"_{dataset}.pdf")
-    return None
 
 
 def main(batch_sizes, dataset, device, epochs, hidden_layers, learning_rates):
@@ -105,9 +79,9 @@ def main(batch_sizes, dataset, device, epochs, hidden_layers, learning_rates):
     )
     results = pandas.DataFrame(0, index=range(len(space)), columns=metrics)
     print(f"Total parameter space to consider: {len(space)}")
-    for i, (b, e, h, l) in enumerate(space):
 
-        # instantiate models, override parameters, and perform training
+    # instantiate models, override parameters, and perform training
+    for i, (b, e, h, l) in enumerate(space):
         model = architecture(
             **hyperparameters
             | dict(
@@ -131,6 +105,31 @@ def main(batch_sizes, dataset, device, epochs, hidden_layers, learning_rates):
 
     # plot and save the results
     plot(dataset, results)
+    return None
+
+
+def plot(dataset, results):
+    """
+    This function plots hyperparameter tuning results. Specifically, this
+    produces a parallel coordiantes plot over the parameter space. Notably,
+    this plot assumes that all entries in the dataframe are floats in 0-1. The
+    plot is written to disk in the current directory.
+
+    :param dataset: dataset used
+    :type dataset: str
+    :param results: results of the performance measurements
+    :type results: pandas Dataframe object
+    :return: None
+    :rtype: NoneType
+    """
+    fig = px.parallel_categories(
+        data_frame=results,
+        color="validation_accuracy",
+        color_continuous_scale=px.colors.diverging.BrBG,
+        range_color=(0, 1),
+        title=f"{dataset}",
+    )
+    fig.write_image(__file__[:-3] + f"_{dataset}.pdf")
     return None
 
 
