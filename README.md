@@ -12,7 +12,7 @@ repos (which are all based on [PyTorch](https://github.com/pytorch/pytorch)).
 Some features of this repo include [optimal templates for
 datasets](https://github.com/sheatsley/models/blob/main/dlm/templates.py),
 [automatic batch sizing to prevent OOM errors on
-GPUs](https://github.com/sheatsley/models/blob/main/dlm/models.py#L366),
+GPUs](https://github.com/sheatsley/models/blob/6046309214b4c74eb930d6a9e14fb58228ccf918/dlm/models.py#L216),
 implicit support for adversarial training subroutines, among others. All of the
 information you need to start using this repo is contained within this one
 ReadMe, ordered by complexity (No need to parse through any ReadTheDocs
@@ -41,44 +41,42 @@ install -e`. Afterwards, you can train a simple CNN on
 [PGD](https://arxiv.org/pdf/1706.06083.pdf)-based adversarial training as
 follows:
 
-```
-import aml
-import dlm
-import mlds
-import torch
+    import aml
+    import dlm
+    import mlds
+    import torch
 
-# load data
-mnist = mlds.mnist
-x_train = torch.from_numpy(mnist.train.data)
-y_train = torch.from_numpy(mnist.train.labels).long()
-x_test = torch.from_numpy(mnist.test.data)
-y_test = torch.from_numpy(mnist.test.labels).long()
+    # load data
+    mnist = mlds.mnist
+    x_train = torch.from_numpy(mnist.train.data)
+    y_train = torch.from_numpy(mnist.train.labels).long()
+    x_test = torch.from_numpy(mnist.test.data)
+    y_test = torch.from_numpy(mnist.test.labels).long()
 
-# instantiate and adversarially train a model
-model = dlm.CNNClassifier(activation=torch.nn.ReLU,
-            attack=aml.pgd,
-            attack_params=dict(
-               alpha=0.01,
-               epochs=40,
-               epsilon=0.3,
-            ),
-            conv_layers=(32, 64),
-            dropout=0.0,
-            hidden_layers=(1024,),
-            kernel_size=1,
-            learning_rate=1e-4,
-            loss=torch.nn.CrossEntropyLoss,
-            optimizer=torch.optim.Adam,
-            optimizer_params={}
-            scheduler=None,
-            scheduler_params={},
-            shape=(1, 28, 28),
-)
-model.fit(x_train, y_train)
+    # instantiate and adversarially train a model
+    model = dlm.CNNClassifier(activation=torch.nn.ReLU,
+                attack=aml.pgd,
+                attack_params=dict(
+                   alpha=0.01,
+                   epochs=40,
+                   epsilon=0.3,
+                ),
+                conv_layers=(32, 64),
+                dropout=0.0,
+                hidden_layers=(1024,),
+                kernel_size=1,
+                learning_rate=1e-4,
+                loss=torch.nn.CrossEntropyLoss,
+                optimizer=torch.optim.Adam,
+                optimizer_params={}
+                scheduler=None,
+                scheduler_params={},
+                shape=(1, 28, 28),
+    )
+    model.fit(x_train, y_train)
 
-# plot the model loss over the training epochs
-model.res.plot(x="epoch", y="training_loss")
-```
+    # plot the model loss over the training epochs
+    model.res.plot(x="epoch", y="training_loss")
 
 Other uses can be found in the
 [examples](https://github.com/sheatsley/models/tree/main/examples) directory.
@@ -90,12 +88,9 @@ complex use cases.
 
 * Adversarial training: When an `aml.Attack` (or `Adversary`) object is
     provided on model initialization, then models are [adversarially
-    trained](https://arxiv.org/pdf/1412.6572.pdf). At this time, three
-    adversarial training schemes are supported: [à la
-    Mądry](https://arxiv.org/pdf/1706.06083.pdf) (sometimes called "PGD-AT"),
-    [TRADES](https://arxiv.org/pdf/1901.08573.pdf), and
-    "[Free](https://arxiv.org/pdf/1904.12843.pdf)." Implementation details
-    surrounding these regimes can be found in `dlm.training`
+    trained](https://arxiv.org/pdf/1412.6572.pdf). At this time, [à la
+    Mądry](https://arxiv.org/pdf/1706.06083.pdf) (sometimes called "PGD-AT")
+    adversarial training is supported. 
 
 * Auto-batch: `RuntimeError: CUDA out of memory.` errors are certainly in the
     running for the most common runtime error with deep learning backends like
