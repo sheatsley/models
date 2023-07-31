@@ -1,7 +1,5 @@
 """
 This script measures model performance as a function of batch size.
-Author: Ryan Sheatsley
-Fri Feb 24 2023
 """
 import argparse
 import warnings
@@ -14,36 +12,6 @@ import torch
 
 # dlm uses lazy modules which induce warnings that overload stdout
 warnings.filterwarnings("ignore", category=UserWarning)
-
-
-def plot(results):
-    """
-    This function plots the batch size performance measurement results.
-    Specifically, this produces one line plot per dataset containing model loss
-    on training & validation data over (normalized) epochs. Batch sizes are
-    divided by color, while data and validation accuracies are split by line
-    style. The plot is written to disk in the current directory.
-
-    :param results: results of the performance measurements
-    :type results: pandas Dataframe object
-    :return: None
-    :rtype: NoneType
-    """
-    plot = seaborn.relplot(
-        data=results,
-        col="dataset",
-        col_wrap=(results.dataset.unique().size + 1) // 2,
-        facet_kws=dict(sharex=False),
-        hue="batch size",
-        kind="line",
-        legend="full" if results.dataset.unique().size > 1 else "auto",
-        palette="flare",
-        style="data",
-        x="epoch",
-        y="loss",
-    )
-    plot.savefig(__file__[:-3] + ".pdf")
-    return None
 
 
 def main(batch_sizes, datasets, device, equalize):
@@ -67,9 +35,9 @@ def main(batch_sizes, datasets, device, equalize):
         columns=("batch size", "dataset", "data", "epoch", "loss"),
     )
     print(f"Batch sizes to benchmark: {batch_sizes}")
-    for i, dataset in enumerate(datasets):
 
-        # load dataset and convert to pytorch tensors
+    # load dataset and convert to pytorch tensors
+    for i, dataset in enumerate(datasets):
         print(f"Preparing {dataset} dataset... {i + 1} of {len(datasets)}")
         data = getattr(mlds, dataset)
         try:
@@ -121,6 +89,36 @@ def main(batch_sizes, datasets, device, equalize):
 
     # normalize results, plot them, and write to disk
     plot(results)
+    return None
+
+
+def plot(results):
+    """
+    This function plots the batch size performance measurement results.
+    Specifically, this produces one line plot per dataset containing model loss
+    on training & validation data over (normalized) epochs. Batch sizes are
+    divided by color, while data and validation accuracies are split by line
+    style. The plot is written to disk in the current directory.
+
+    :param results: results of the performance measurements
+    :type results: pandas Dataframe object
+    :return: None
+    :rtype: NoneType
+    """
+    plot = seaborn.relplot(
+        data=results,
+        col="dataset",
+        col_wrap=(results.dataset.unique().size + 1) // 2,
+        facet_kws=dict(sharex=False),
+        hue="batch size",
+        kind="line",
+        legend="full" if results.dataset.unique().size > 1 else "auto",
+        palette="flare",
+        style="data",
+        x="epoch",
+        y="loss",
+    )
+    plot.savefig(__file__[:-3] + ".pdf", bbox_inches="tight")
     return None
 
 

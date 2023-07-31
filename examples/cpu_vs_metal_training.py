@@ -1,8 +1,6 @@
 """
-This script benchmarks the performance of training, inference, and crafting
-adversarial examples on macOS cpus vs gpus (i.e., Metal).
-Author: Ryan Sheatsley
-Thu Feb 23 2023
+This script benchmarks (and produces a bar chart of) the performance of
+training, inference, and crafting adversarial examples on macOS cpus vs gpus.
 """
 import argparse
 import os
@@ -52,6 +50,71 @@ def benchmark(attack, model, x, y):
         times.append(time.time() - start)
         print(f"{stage} complete! ({times[-1]:.2f}s)")
     return times
+
+
+def main(attack, datasets):
+    """
+    This function is the main entry point for macOS cpu vs gpu comparison.
+    Specifically, this: (1) loads the dataset(s), (2) instantiates the attack
+    object, (3) benchmarks performance, and (4) plots the results.
+
+    :param attack: attack to use
+    :type attack: aml function
+    :param dataset: dataset to use
+    :type dataset: str
+    :return: None
+    :rtype: NoneType
+    """
+    results = pandas.DataFrame(
+        0,
+        index=range(2 * len(datasets)),
+        columns=("device", "dataset", "training", "inference", "crafting"),
+    )
+
+    # load dataset and convert to pytorch tensors
+    for i, dataset in enumerate(datasets):
+        print(f"Preparing {dataset} dataset... {i + 1} of {len(datasets)}")
+        data = getattr(mlds, dataset)
+        try:
+            x = torch.from_numpy(data.train.data)
+            y = torch.from_numpy(data.train.labels).long()
+        except AttributeError:
+            x = torch.from_numpy(data.dataset.data)
+            y = torch.from_numpy(data.dataset.labels).long()
+
+        # compute feature range for l2 attacks and fetch model template
+        mins, maxs = (x.min(0).values.clamp(max=0), x.max(0).values.clamp(min=1))
+        template = getattr(dlm.templates, dataset)
+        architecture, hyperparameters = (
+            (dlm.CNNClassifier, template.cnn)
+            if hasattr(template, "cnn")
+            else (dlm.MLPClassifier, template.mlp)
+        )
+
+        # instantiate an mlp or cnn and migrate tensors to the device
+        for j, d in enumerate(("cpu", "mps")):
+            print(f"Instantiating {architecture.__name__} model on {d}...")
+            model = architecture(**hyperparameters | dict(device=d, verbosity=0))
+            x, y = x.to(d), y.to(d)
+
+            # instantiate the attack and perform the benchmarks
+            print(f"Instantiating {attack.__name__} on {d} and running benchmarks...")
+            attack_parameters = dict(alpha=0.01, epochs=15, model=model, verbosity=0)
+            budget = 0.15
+            l0 = int(x.size(1) * budget) + 1
+            l2 = maxs.sub(mins).norm(2).mul(budget).item()
+            linf = budget
+            budgets = {
+                **dict.fromkeys((aml.apgdce, aml.apgddlr, aml.bim, aml.pgd), linf),
+                **dict.fromkeys((aml.cwl2, aml.df, aml.fab), l2),
+                **dict.fromkeys((aml.jsma,), l0),
+            }
+            atk = attack(**attack_parameters | dict(epsilon=budgets[attack]))
+            results.loc[i * 2 + j] = [d, dataset] + benchmark(atk, model, x, y)
+
+    # plot and save the results
+    plot(results)
+    return None
 
 
 def plot(results):
@@ -109,71 +172,6 @@ def plot(results):
     return None
 
 
-def main(attack, datasets):
-    """
-    This function is the main entry point for macOS cpu vs gpu comparison.
-    Specifically, this: (1) loads the dataset(s), (2) instantiates the attack
-    object, (3) benchmarks performance, and (4) plots the results.
-
-    :param attack: attack to use
-    :type attack: aml function
-    :param dataset: dataset to use
-    :type dataset: str
-    :return: None
-    :rtype: NoneType
-    """
-    results = pandas.DataFrame(
-        0,
-        index=range(2 * len(datasets)),
-        columns=("device", "dataset", "training", "inference", "crafting"),
-    )
-    for i, dataset in enumerate(datasets):
-
-        # load dataset and convert to pytorch tensors
-        print(f"Preparing {dataset} dataset... {i + 1} of {len(datasets)}")
-        data = getattr(mlds, dataset)
-        try:
-            x = torch.from_numpy(data.train.data)
-            y = torch.from_numpy(data.train.labels).long()
-        except AttributeError:
-            x = torch.from_numpy(data.dataset.data)
-            y = torch.from_numpy(data.dataset.labels).long()
-
-        # compute feature range for l2 attacks and fetch model template
-        mins, maxs = (x.min(0).values.clamp(max=0), x.max(0).values.clamp(min=1))
-        template = getattr(dlm.templates, dataset)
-        architecture, hyperparameters = (
-            (dlm.CNNClassifier, template.cnn)
-            if hasattr(template, "cnn")
-            else (dlm.MLPClassifier, template.mlp)
-        )
-
-        # instantiate an mlp or cnn and migrate tensors to the device
-        for j, d in enumerate(("cpu", "mps")):
-            print(f"Instantiating {architecture.__name__} model on {d}...")
-            model = architecture(**hyperparameters | dict(device=d, verbosity=0))
-            x, y = x.to(d), y.to(d)
-
-            # instantiate the attack and perform the benchmarks
-            print(f"Instantiating {attack.__name__} on {d} and running benchmarks...")
-            attack_parameters = dict(alpha=0.01, epochs=15, model=model, verbosity=0)
-            budget = 0.15
-            l0 = int(x.size(1) * budget) + 1
-            l2 = maxs.sub(mins).norm(2).mul(budget).item()
-            linf = budget
-            budgets = {
-                **dict.fromkeys((aml.apgdce, aml.apgddlr, aml.bim, aml.pgd), linf),
-                **dict.fromkeys((aml.cwl2, aml.df, aml.fab), l2),
-                **dict.fromkeys((aml.jsma,), l0),
-            }
-            atk = attack(**attack_parameters | dict(epsilon=budgets[attack]))
-            results.loc[i * 2 + j] = [d, dataset] + benchmark(atk, model, x, y)
-
-    # plot and save the results
-    plot(results)
-    return None
-
-
 if __name__ == "__main__":
     """
     This script benchmarks the performance of training, inference, and crafting
@@ -184,7 +182,6 @@ if __name__ == "__main__":
     statistics on model training, test set inference, and crafting adversarial
     examples on the both the cpu and gpu, and (4) plots the results.
     """
-    breakpoint()
     parser = argparse.ArgumentParser(
         description="macOS cpu vs gpu performance comparison"
     )
