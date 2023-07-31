@@ -1,10 +1,5 @@
 """
-This module runs unit tests to test performance and correctness of the dlm
-repo. Specifically, this defines two types of tests: (1) functional, and (2)
-performance. Details surrounding these tests can be found in the respecetive
-classes: FunctionalTests and PerformanceTests.
-Authors: Ryan Sheatsley and Blaine Hoak
-Thu Feb 16 2023
+This module runs unit tests to measure dlm performance and correctness.
 """
 
 import itertools
@@ -183,7 +178,6 @@ class FunctionalTests(unittest.TestCase):
         ):
             print(f"Testing {model_class.__name__}...", end="\r")
             with self.subTest(Model=f"{model_class.__name__}", Slim=slim):
-
                 # initialize models at various states
                 model = model_class(**template)
                 trained = model_class(**template)
