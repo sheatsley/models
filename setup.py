@@ -4,30 +4,14 @@ Build script for Deep Learning Models
 import subprocess
 
 import setuptools
-import setuptools.command.install
 
-
-class Install(setuptools.command.install.install):
-    """
-    This class overrides the default install command so that the __version__
-    attribute of the dlm package is set statically.
-
-    :func:`run`: computes the git hash and saves it to a file
-    """
-
-    def run(self):
-        """
-        This method computes the git hash and saves it to a file.
-
-        :return: None
-        :rtype: Nonetype
-        """
-        version = subprocess.check_output(
-            ("git", "rev-parse", "--short", "HEAD"), text=True
-        ).strip()
-        with open("mlds/VERSION", "w") as f:
-            f.write(f"{version}\n")
-        return super().run()
+# compute git hash and save to file for non-editable installs
+# overriding install for package data is bugged: https://github.com/pypa/setuptools/issues/1064
+version = subprocess.check_output(
+    ("git", "rev-parse", "--short", "HEAD"), text=True
+).strip()
+with open("dlm/VERSION", "w") as f:
+    f.write(f"{version}\n")
 
 
 with open("README.md", "r") as f:
@@ -36,12 +20,11 @@ with open("README.md", "r") as f:
 setuptools.setup(
     author="Ryan Sheatsley",
     author_email="ryan@sheatsley.me",
-    cmdclass=dict(install=Install),
     classifiers=[
         "Development Status :: 4 - Beta",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.10",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Scientific/Engineering :: Information Analysis",
     ],
@@ -53,7 +36,8 @@ setuptools.setup(
     keywords="machine-learning pytorch keras",
     name="dlm",
     packages=setuptools.find_packages(),
-    python_requires=">=3.11",
+    package_data={"dlm": ["VERSION"]},
+    python_requires=">=3.10",
     url="https://github.com/sheatsley/models",
     version="1.1",
 )
