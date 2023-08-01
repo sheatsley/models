@@ -443,7 +443,7 @@ class LinearClassifier:
         put into inference mode, and the maximum batch size is computed if
         auto_batch is True.
 
-        Notably, there are some subtlies in loading state dictionaries with
+        Notably, there are some subtleties in loading state dictionaries with
         lazy modules in that they *must* be initialized before the state dict
         can be loaded. To this end, if a torch.nn.modules.container Sequential
         object is not an attribute of this class, then the number of input
