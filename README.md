@@ -13,10 +13,13 @@ Some features of this repo include [optimal templates for
 datasets](https://github.com/sheatsley/models/blob/main/dlm/templates.py),
 [automatic batch sizing to prevent OOM errors on
 GPUs](https://github.com/sheatsley/models/blob/6046309214b4c74eb930d6a9e14fb58228ccf918/dlm/models.py#L216),
-implicit support for adversarial training subroutines, among others. All of the
-information you need to start using this repo is contained within this one
-ReadMe, ordered by complexity (No need to parse through any ReadTheDocs
-documentation).
+[pretrained
+models](https://github.com/sheatsley/models/blob/main/dlm/pretrained.py),
+[implicit support for adversarial
+training](https://github.com/sheatsley/models/blob/e2061c9238fd4616b88304c361ebeaf163f9e01b/dlm/models.py#L344C12-L344C12),
+among others. All of the information you need to start using this repo is
+contained within this one ReadMe, ordered by complexity (No need to parse
+through any ReadTheDocs documentation).
 
 ## Table of Contents
 
@@ -136,8 +139,7 @@ classes: `LinearClassifier`, `MLPClassifier` (which inherits from
 The `dlm.templates` module provides hyperparameters I have found that are
 competitive with the state-of-the-art, prioritizing a lower training time
 (e.g., lower epochs, larger batch sizes, and smaller models). Finally, the
-`dlm.training` module provides varying flavors of [adversarial
-training](https://arxiv.org/pdf/1412.6572.pdf).
+`dlm.pretrained` module provides popular pretrained models to experiment with.
 
 Beyond specific parameters (described below), the following are some useful
 methods: `accuracy`: returns model accuracy over some data points, `fit`:
