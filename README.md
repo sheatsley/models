@@ -93,7 +93,7 @@ complex use cases.
     provided on model initialization, then models are [adversarially
     trained](https://arxiv.org/pdf/1412.6572.pdf). At this time, [à la
     Mądry](https://arxiv.org/pdf/1706.06083.pdf) (sometimes called "PGD-AT")
-    adversarial training is supported. 
+    adversarial training is supported.
 
 * Auto-batch: `RuntimeError: CUDA out of memory.` errors are certainly in the
     running for the most common runtime error with deep learning backends like
@@ -103,15 +103,15 @@ complex use cases.
     are here to save us from that). _Auto-batching_ is a feature within all
     `dlm.models` classes that attempts to find the maximal batch size for a
     specified memory utilization in three use scenarios: training, inference,
-    and crafting adversarial examples. Upon model initialization, if
-    `auto_batch` is nonzero, then, on `fit`, the `find_max_batch` subroutine is
-    called. This subroutine performs binary search on GPU memory utilization
-    (parameterized by `auto_batch`) over these three use cases with randomly
-    generated data of varying batch sizes. Once the batch sizes are determined,
-    training and inference stages subsequently batched to the appropriate size
-    based on whether the model parameters are tracking gradients (batching for
-    crafting needs to be handled manually, since computational graphs typically
-    go beyond the model itself).
+    and [crafting adversarial examples](https://github.com/sheatsley/attacks).
+    Upon model initialization, if `auto_batch` is nonzero, then, on `fit`, the
+    `find_max_batch` subroutine is called. This subroutine performs binary
+    search on GPU memory utilization (parameterized by `auto_batch`) over these
+    three use cases with randomly generated data of varying batch sizes. Once
+    the batch sizes are determined, training and inference stages subsequently
+    batched to the appropriate size based on whether the model parameters are
+    tracking gradients (batching for crafting needs to be handled manually,
+    since computational graphs typically go beyond the model itself).
 
 * Classes: When `classes` is not provided on model initialization, it will be
     inferred from the number of unique elements on the label set during
@@ -128,7 +128,7 @@ complex use cases.
 
 This repo was designed for interoperability with following
 [datasets](https://github.com/sheatsley/datasets) and
-[attacks](https://github.com/sheatsley/datasets) repos. The intention is to
+[attacks](https://github.com/sheatsley/attacks) repos. The intention is to
 enable rapid prototyping for evaluating the robustness of deep learning models
 to adversarial examples. To this end, the abstractions defined in this repo are
 heavily inspired by [Keras](https://keras.io) and
