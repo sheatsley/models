@@ -13,7 +13,6 @@ version = subprocess.check_output(
 with open("dlm/VERSION", "w") as f:
     f.write(f"{version}\n")
 
-
 with open("README.md", "r") as f:
     long_description = f.read()
 
