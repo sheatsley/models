@@ -35,7 +35,7 @@ class cicmalmem2022:
     )
 
 
-class fmnist:
+class fashionmnist:
     """
     Fashion-MNIST (https://github.com/zalandoresearch/fashion-mnist) is a
     dataset for predicting Zalando's article images. It has ten labels that
