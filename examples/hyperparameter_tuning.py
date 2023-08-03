@@ -1,6 +1,6 @@
 """
 This script performs basic hyperparameter tuning and produces a parallel
-coordiantes plot over the parameter space.
+coordinates plot over the parameter space.
 """
 import argparse
 import itertools
