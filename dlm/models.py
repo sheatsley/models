@@ -796,8 +796,8 @@ class CNNClassifier(MLPClassifier):
                 ),
                 self.conv_layers,
             ),
-            [self.activation()],
             [torch.nn.MaxPool2d(self.pool_kernel)],
+            [self.activation()],
         )
 
         # unflatten and attach convolutional and linear layers with flatten
