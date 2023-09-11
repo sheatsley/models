@@ -338,11 +338,10 @@ class LinearClassifier:
 
             # perform one iteration of training
             for xb, yb in tset:
-                self.model.requires_grad_(False)
-                self.model.eval()
                 if self.attack is not None:
+                    self.model.eval()
                     xb = xb.add(self.attack.craft(xb, yb, reset=True))
-                self.model.train()
+                    self.model.train()
                 self.model.requires_grad_(True)
                 logits = self(xb)
                 loss = self.loss(logits, yb)
@@ -398,6 +397,7 @@ class LinearClassifier:
 
         # initialize model and instantiate loss, optimizer, scheduler, & attack
         self.model(x[:1])
+        self.model.requires_grad_(False)
         self.loss = self.loss_func()
         self.optimizer = self.optimizer_alg(
             self.model.parameters(), lr=self.learning_rate, **self.optimizer_params
