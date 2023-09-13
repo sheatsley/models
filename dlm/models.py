@@ -313,12 +313,8 @@ class LinearClassifier:
         self.batch_size = min(self.batch_size, self.sizes["training"])
         tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True)
         vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
-        parts, stats = (
-            "training",
-            "validation",
-            "adversarial_training",
-            "adversarial_validation",
-        ), ("accuracy", "loss")
+        parts = ("training", "validation", "adv_training", "adv_validation")
+        stats = ("accuracy", "loss")
         metrics = ["epoch"] + [f"{p}_{m}" for p in parts for m in stats]
         self.res = pandas.DataFrame(0, index=range(1, self.epochs + 1), columns=metrics)
         max_threads = torch.get_num_threads()
@@ -549,23 +545,24 @@ class LinearClassifier:
 
             # compute adversarial metrics and str representation
             if self.attack is not None:
+                avacc, avloss = tacc, tloss
                 tx, ty = tset.dataset.tensors
                 tlogits = self(tx, grad_enabled=False)
-                atloss = self.loss(logits, ty).item()
-                atacc = tlogits.argmax(1).eq_(ty).mean(dtype=torch.float).item()
+                tloss = self.loss(logits, ty).item()
+                tacc = tlogits.argmax(1).eq_(ty).mean(dtype=torch.float).item()
                 vxa = vx.add(self.attack.craft(vx, vy, reset=True))
                 vlogits = self(vxa, grad_enabled=False)
                 avacc = vlogits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
                 avloss = self.loss(logits, vy).item()
                 astr = (
                     f"Adv Train Acc: {atacc:.1%} "
-                    f"({atacc - self.res.adversarial_training_accuracy.iloc[e - 2]:+.2%}) "
+                    f"({atacc - self.res.adv_training_accuracy.iloc[e - 2]:+.2%}) "
                     f"Adv Train Loss: {atloss:.2f} "
-                    f"({atloss - self.res.adversarial_training_loss.iloc[e - 2]:+.2f}) "
+                    f"({atloss - self.res.adv_training_loss.iloc[e - 2]:+.2f}) "
                     f"Adv Val Acc: {avacc:.1%} "
-                    f"({avacc - self.res.adversarial_validation_accuracy.iloc[e - 2]:+.2%}) "
+                    f"({avacc - self.res.adv_validation_accuracy.iloc[e - 2]:+.2%}) "
                     f"Adv Val Loss: {avloss:.2f} "
-                    f"({avloss - self.res.adversarial_validation_loss.iloc[e - 2]:+.2f}) "
+                    f"({avloss - self.res.adv_validation_loss.iloc[e - 2]:+.2f}) "
                 )
         self.res.loc[e] = e, tacc, tloss, vacc, vloss, atacc, atloss, avacc, avloss
 
