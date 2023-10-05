@@ -469,7 +469,7 @@ class LinearClassifier:
 
         # load model or state dict (and forcibly compile if necessary)
         model = torch.load(path, map_location=self.device)
-        if type(model) == torch.nn.Sequential:
+        if type(model) is torch.nn.Sequential:
             self.model = model
         else:
             try:
