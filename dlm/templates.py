@@ -77,7 +77,6 @@ class fashionmnist:
         dropout=0.4,
         epochs=20,
         hidden_layers=(512,),
-        kernel_size=3,
         learning_rate=1e-3,
         loss=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.Adam,
