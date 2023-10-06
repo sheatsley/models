@@ -533,7 +533,7 @@ class LinearClassifier:
         vacc = vloss = atacc = atloss = avacc = avloss = 0
         vstr = astr = ""
         if len(vset) > 0:
-            vx, vy = vset.dataset.tensors
+            vx, vy = next(iter(vset))
             vlogits = self(vx, grad_enabled=False)
             vloss = self.loss(vlogits, vy).item()
             vacc = vlogits.argmax(1).eq_(vy).mean(dtype=torch.float).item()
@@ -547,7 +547,7 @@ class LinearClassifier:
             # compute adversarial metrics and str representation
             if self.attack is not None:
                 atacc, atloss = tacc, tloss
-                tx, ty = tset.dataset.tensors
+                tx, ty = next(iter(tset))
                 tlogits = self(tx, grad_enabled=False)
                 tloss = self.loss(tlogits, ty).item()
                 tacc = tlogits.argmax(1).eq_(ty).mean(dtype=torch.float).item()
@@ -716,11 +716,11 @@ class MLPClassifier(LinearClassifier):
 
 class CNNClassifier(MLPClassifier):
     """
-    This class extends the MLPClassifier class via conv_layers and kernel_size.
-    Specifically, a CNNClassifier object is a PyTorch-based
-    multi-convolutional-and-linear-layer classification model (i.e., a
-    convolutional neural network). This class inherits the following methods
-    as-is from the MLPClassifier class:
+    This class extends the MLPClassifier class via conv_kernel, conv_layers,
+    conv_padding, and pool_kernel. Specifically, a CNNClassifier object is a
+    PyTorch-based multi-convolutional-and-linear-layer classification model
+    (i.e., a convolutional neural network). This class inherits the following
+    methods as-is from the MLPClassifier class:
 
     :func:`__call__`: returns model logits
     :func:`__getattr__`: return torch.nn Sequential object attributes
