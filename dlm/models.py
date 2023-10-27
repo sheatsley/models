@@ -315,8 +315,8 @@ class LinearClassifier:
         vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
         prt = "training", "validation", "adversarial_training", "adversarial_validation"
         stats = "accuracy", "loss"
-        metrics = ["epoch"] + [f"{p}_{m}" for p in prt for m in stats]
-        self.res = pandas.DataFrame(0, index=range(1, self.epochs + 1), columns=metrics)
+        cols = ["epoch"] + [f"{p}_{m}" for p in prt for m in stats]
+        self.res = pandas.DataFrame(0.0, index=range(1, self.epochs + 1), columns=cols)
         max_threads = torch.get_num_threads()
         torch.set_num_threads(self.threads)
         torch.backends.cudnn.benchmark = self.benchmark
