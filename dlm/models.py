@@ -547,7 +547,7 @@ class LinearClassifier:
             # compute adversarial metrics and str representation
             if self.attack is not None:
                 atacc, atloss = tacc, tloss
-                tx, ty = next(iter(tset))
+                tx, ty = tset.dataset.tensors
                 tlogits = self(tx, grad_enabled=False)
                 tloss = self.loss(tlogits, ty).item()
                 tacc = tlogits.argmax(1).eq_(ty).mean(dtype=torch.float).item()
