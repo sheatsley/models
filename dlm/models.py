@@ -9,6 +9,8 @@ import itertools
 import pandas
 import torch
 
+import dlm.utilities
+
 
 class LinearClassifier:
     """
@@ -311,8 +313,8 @@ class LinearClassifier:
 
         # configure dataloaders, results dataframe, threads, and training mode
         self.batch_size = min(self.batch_size, self.sizes["training"])
-        tset = torch.utils.data.DataLoader(tsub, self.batch_size, shuffle=True)
-        vset = torch.utils.data.DataLoader(vsub, max(1, len(vsub)))
+        tset = dlm.utilities.DataLoader(tsub, self.batch_size, shuffle=True)
+        vset = dlm.utilities.DataLoader(vsub, max(1, len(vsub)))
         prt = "training", "validation", "adversarial_training", "adversarial_validation"
         stats = "accuracy", "loss"
         cols = ["epoch"] + [f"{p}_{m}" for p in prt for m in stats]
@@ -394,7 +396,7 @@ class LinearClassifier:
         :param valset: hold-out set or proportion of training data use
         :type valset: tuple of torch Tensor objects (n, m) & (n,) or float
         :return: training and validation sets
-        :rtype: tuple of torch.utils.data TensorDataset objects
+        :rtype: tuple torch.utils.data Dataset-inherited objects
         """
 
         # initialize model and instantiate loss, optimizer, scheduler, & attack
