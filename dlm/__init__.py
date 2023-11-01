@@ -6,6 +6,7 @@ import pathlib
 import subprocess
 
 import dlm.templates as templates
+import dlm.utilities as utilities
 from dlm.models import CNNClassifier, LinearClassifier, MLPClassifier
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "LinearClassifier",
     "MLPClassifier",
     "templates",
+    "utilities",
 ]
 try:
     cmd = ("git", "-C", *__path__, "rev-parse", "--short", "HEAD")
