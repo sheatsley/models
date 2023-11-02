@@ -38,5 +38,5 @@ setuptools.setup(
     package_data={"dlm": ["VERSION"]},
     python_requires=">=3.10",
     url="https://github.com/sheatsley/models",
-    version="1.1",
+    version="1.2",
 )
