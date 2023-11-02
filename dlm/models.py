@@ -1,8 +1,7 @@
 """
-This module defines the core for the deep learning models repo. All supported
-deep learning models are defined here, with the LinearClassifier class defining
-the primary features across all models (which all inherit from
-LinearClassifier).
+This module is the core for the deep learning models repo. All supported deep
+learning models are defined here, with the LinearClassifier class defining the
+primary features across all models (which all inherit from LinearClassifier).
 """
 import itertools
 
