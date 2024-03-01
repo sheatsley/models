@@ -3,6 +3,7 @@ This module is the core for the deep learning models repo. All supported deep
 learning models are defined here, with the LinearClassifier class defining the
 primary features across all models (which all inherit from LinearClassifier).
 """
+
 import itertools
 
 import pandas
@@ -126,9 +127,9 @@ class LinearClassifier:
             "learning_rate": self.learning_rate,
             "loss": self.loss_func.__name__,
             "optimizer": self.optimizer_alg.__name__,
-            "scheduler": "N/A"
-            if self.scheduler_alg is None
-            else self.scheduler_alg.__name__,
+            "scheduler": (
+                "N/A" if self.scheduler_alg is None else self.scheduler_alg.__name__
+            ),
         }
         return None
 
@@ -325,9 +326,9 @@ class LinearClassifier:
         d = (
             torch.cuda.get_device_name()
             if x.is_cuda
-            else "apple gpu"
-            if x.device.type == "mps"
-            else f"{self.threads} cpu threads"
+            else (
+                "apple gpu" if x.device.type == "mps" else f"{self.threads} cpu threads"
+            )
         )
         print(
             f"Performing{'' if self.attack is None else ' adversarial'} training "
@@ -360,11 +361,13 @@ class LinearClassifier:
             tacc, tloss = (m.div(len(tsub)).item() for m in (tacc, tloss))
             p = self.progress(e, tacc, tloss, tset, vset)
             self.model.train()
-            print(
-                f"Epoch {e:{len(str(self.epochs))}} / {self.epochs} {p}"
-            ) if verbose and not e % self.verbosity else print(
-                f"Epoch {e}... ({e / self.epochs:.1%})",
-                end="\x1b[K\r",
+            (
+                print(f"Epoch {e:{len(str(self.epochs))}} / {self.epochs} {p}")
+                if verbose and not e % self.verbosity
+                else print(
+                    f"Epoch {e}... ({e / self.epochs:.1%})",
+                    end="\x1b[K\r",
+                )
             )
 
         # set model to eval mode, restore thread count, and update state
@@ -496,7 +499,7 @@ class LinearClassifier:
         features = (
             torch.tensor(self.model[0].unflattened_size).prod()
             if type(self.model[0]) is torch.nn.Unflatten
-            else next(iter(self.model.state_dict().values())).size(0)
+            else next(iter(self.model.state_dict().values())).size(1)
         )
         self.classes = self.model[-1].out_features
         self.params["features"] = features
