@@ -5,6 +5,7 @@ This module initializes the deep learning models repo.
 import pathlib
 import subprocess
 
+import dlm.pretrained as pretrained
 import dlm.templates as templates
 import dlm.utilities as utilities
 from dlm.models import CNNClassifier, LinearClassifier, MLPClassifier
@@ -13,6 +14,7 @@ __all__ = [
     "CNNClassifier",
     "LinearClassifier",
     "MLPClassifier",
+    "pretrained",
     "templates",
     "utilities",
 ]
