@@ -506,7 +506,7 @@ class LinearClassifier:
         self.params["classes"] = self.classes
         self.sizes = self.find_max_batch(self.auto_batch)
         self.state = "pretrained"
-        self.summary()
+        self.verbosity and self.summary()
         self.model.requires_grad_(False)
         self.model.eval()
         return self
