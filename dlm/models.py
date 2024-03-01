@@ -447,7 +447,7 @@ class LinearClassifier:
         many of the useful attributes set during fit are estimated from the
         model directly (e.g., number of features, classes, etc.), the model is
         put into inference mode, and the maximum batch size is computed if
-        auto_batch is True.
+        auto_batch is nonzero.
 
         Notably, there are some subtleties in loading state dictionaries with
         lazy modules in that they *must* be initialized before the state dict
@@ -504,7 +504,7 @@ class LinearClassifier:
         self.classes = self.model[-1].out_features
         self.params["features"] = features
         self.params["classes"] = self.classes
-        self.sizes = self.find_max_batch(0)
+        self.sizes = self.find_max_batch(self.auto_batch)
         self.state = "pretrained"
         self.summary()
         self.model.requires_grad_(False)
