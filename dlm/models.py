@@ -618,8 +618,8 @@ class LinearClassifier:
 
         :param device: device to switch to
         :type device: str
-        :return: None
-        :rtype: NoneType
+        :return: a linear classifier on the new device
+        :rtype: LinearClassifier object
         """
         self.device = device
         self.model.to(self.device)
@@ -630,7 +630,7 @@ class LinearClassifier:
             self.scheduler_alg is not None and self.scheduler.load_state_dict(
                 self.scheduler.state_dict()
             )
-        return None
+        return self
 
 
 class MLPClassifier(LinearClassifier):
