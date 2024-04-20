@@ -3,6 +3,7 @@ This module defines the state-of-the-art architectures and hyperparameters for
 a variety of datasets from https://github.com/sheatsley/datasets. It serves as
 a form of bookkeeping to be passed as arguments to model instantiations.
 """
+
 import torch
 
 
@@ -102,7 +103,7 @@ class mnist:
         attack=None,
         attack_params={},
         batch_size=64,
-        classe=classes,
+        classes=classes,
         dropout=0.0,
         hidden_layers=(512,),
         epochs=20,
